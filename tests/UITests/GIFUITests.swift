@@ -54,6 +54,7 @@ final class GIFUITests: XCTestCase {
         XCTAssertTrue(app.buttons["save-design"].isEnabled)
         app.buttons["save-design"].tap()
         XCTAssertTrue(app.staticTexts["별빛 여행"].firstMatch.waitForExistence(timeout: 5))
+        try verifyHomeScreenWidget(designName: "별빛 여행")
     }
 
     private func reveal(_ element: XCUIElement) {
@@ -107,7 +108,7 @@ final class GIFUITests: XCTestCase {
         try verifyHomeScreenWidget()
     }
 
-    private func verifyHomeScreenWidget() throws {
+    private func verifyHomeScreenWidget(designName: String = "새 GIF") throws {
         let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         XCUIDevice.shared.press(.home)
         home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.68)).press(forDuration: 1.6)
@@ -141,15 +142,14 @@ final class GIFUITests: XCTestCase {
         XCTAssertTrue(value.waitForExistence(timeout: 10), home.debugDescription)
         value.tap()
         saveScreenshot("gif-design-picker.png")
-        let gif = home.buttons["새 GIF"].firstMatch
+        let gif = home.buttons[designName].firstMatch
         XCTAssertTrue(gif.waitForExistence(timeout: 5), home.debugDescription)
         gif.tap()
         home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).tap()
         Thread.sleep(forTimeInterval: 2)
         saveScreenshot("gif-widget.png")
-        let poster = widget.screenshot().pngRepresentation
-        Thread.sleep(forTimeInterval: 0.35)
-        XCTAssertEqual(poster, widget.screenshot().pngRepresentation, "홈 화면에서는 GIF의 대표 장면을 유지해야 한다")
+        XCTAssertNotEqual(app.state, .runningForeground, "홈 애니메이션에 앱을 열 필요가 없어야 한다")
+        // 실제 홈 애니메이션은 GIFHomeDeviceTests에서 실기기 화면으로 검증한다.
         widget.tap()
         XCTAssertTrue(app.buttons["일시 정지"].waitForExistence(timeout: 5), app.debugDescription)
         saveScreenshot("gif-widget-opened-player.png")

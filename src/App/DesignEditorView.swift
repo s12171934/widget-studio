@@ -37,6 +37,7 @@ struct DesignEditorView: View {
         NavigationStack {
             Form {
                 previewSection
+                if design.template.usesImage { imageLayoutSection }
                 Section("기본") {
                     TextField("디자인 이름", text: $design.name)
                     Picker("템플릿", selection: $design.template) {
@@ -143,6 +144,43 @@ struct DesignEditorView: View {
     }
 
     // MARK: 섹션
+
+    private var imageLayoutSection: some View {
+        Section {
+            Picker("이미지 맞춤", selection: imageLayoutBinding(\.mode)) {
+                ForEach(WidgetImageLayout.Mode.allCases) { mode in Text(mode.label).tag(mode) }
+            }
+            .pickerStyle(.segmented)
+            LabeledContent("확대", value: "\(Int(design.imageLayout(for: family).zoom * 100))%")
+            Slider(value: imageLayoutBinding(\.zoom), in: 1...3, step: 0.05)
+                .accessibilityLabel("이미지 확대")
+            LabeledContent("가로 위치", value: "\(Int(design.imageLayout(for: family).horizontal * 100))%")
+            Slider(value: imageLayoutBinding(\.horizontal), in: -1...1, step: 0.05)
+                .accessibilityLabel("이미지 가로 위치")
+            LabeledContent("세로 위치", value: "\(Int(design.imageLayout(for: family).vertical * 100))%")
+            Slider(value: imageLayoutBinding(\.vertical), in: -1...1, step: 0.05)
+                .accessibilityLabel("이미지 세로 위치")
+            Button("이 크기 초기화", systemImage: "arrow.counterclockwise") {
+                design.imageLayouts.removeValue(forKey: family.studioSizeKey)
+            }
+        } header: {
+            Text("\(family.studioSizeLabel) 위젯 화면")
+        } footer: {
+            Text("미리보기에서 작게·중간·크게를 선택해 각각 설정하세요. 사진과 GIF의 모든 장면에 같은 표시 범위를 적용하며, 저장하면 홈 화면에 반영됩니다.")
+        }
+    }
+
+    private func imageLayoutBinding<Value>(_ keyPath: WritableKeyPath<WidgetImageLayout, Value>) -> Binding<Value> {
+        let key = family.studioSizeKey
+        return Binding(
+            get: { (design.imageLayouts[key] ?? WidgetImageLayout())[keyPath: keyPath] },
+            set: { value in
+                var layout = design.imageLayouts[key] ?? WidgetImageLayout()
+                layout[keyPath: keyPath] = value
+                design.imageLayouts[key] = layout
+            }
+        )
+    }
 
     /// 배경화면 위에 실제 크기의 위젯을 띄우고, 크기를 유리 선택기로 바꾼다.
     private var previewSection: some View {
@@ -257,7 +295,7 @@ struct DesignEditorView: View {
             }
         } header: { Text("GIF") }
         footer: {
-            Text("홈 화면에는 첫 장면이 표시됩니다. 위젯을 누르면 앱에서 반복 재생합니다. GIF는 12MB·300프레임 이하로 골라 주세요.")
+            Text("저장하면 앱을 열지 않아도 홈 화면 위젯에서 반복 재생됩니다. 위젯용으로 16장면·2초 루프로 변환하며 원본 GIF는 그대로 보관합니다. 12MB·300프레임 이하로 골라 주세요.")
         }
     }
 

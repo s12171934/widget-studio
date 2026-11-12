@@ -13,6 +13,14 @@ BUNDLE_ID="io.github.s12171934.widgetstudio"
 
 gen() {
   command -v xcodegen >/dev/null || { echo "xcodegen 이 필요합니다: brew install xcodegen" >&2; exit 1; }
+  local generator="$DERIVED/generate-widget-fonts"
+  local stamp="$DERIVED/WidgetFonts/.generated"
+  if [ ! -f "$stamp" ] || [ "$ROOT/tools/WidgetAnimationFont.swift" -nt "$stamp" ] || [ "$ROOT/tools/GenerateWidgetFonts.swift" -nt "$stamp" ]; then
+    mkdir -p "$DERIVED"
+    xcrun --sdk macosx swiftc -O "$ROOT/tools/WidgetAnimationFont.swift" "$ROOT/tools/GenerateWidgetFonts.swift" -o "$generator"
+    "$generator" "$ROOT"
+    touch "$stamp"
+  fi
   (cd "$ROOT" && xcodegen generate --quiet)
 }
 

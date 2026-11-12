@@ -114,10 +114,16 @@ struct WidgetStudioEntryView: View {
     var body: some View {
         if let design = entry.design {
             let photo = design.template.usesImage ? DesignStore.loadPhoto(for: design.id) : nil
+            let frames = design.template == .gif ? DesignStore.loadGIFFrames(for: design.id) : nil
             ZStack {
+                if let frames {
+                    GIFWidgetAnimationView(frames: frames, anchor: entry.date.addingTimeInterval(-60),
+                                           glass: isGlass, layout: design.imageLayout(for: family))
+                    Color.black.opacity(design.photoDimming)
+                }
                 // 유리 모드에서는 배경이 걷히므로 사진을 내용 층에 올려 유리 위에 단색으로 남긴다.
-                if isGlass, let photo {
-                    GlassPhotoLayer(photo: photo)
+                else if isGlass, let photo {
+                    GlassPhotoLayer(photo: photo, layout: design.imageLayout(for: family))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                         .opacity(0.9)
@@ -126,7 +132,7 @@ struct WidgetStudioEntryView: View {
                     .padding(16)
             }
             .containerBackground(for: .widget) {
-                DesignBackground(design: design, photo: photo)
+                DesignBackground(design: design, photo: frames == nil ? photo : nil, family: family)
             }
             .widgetURL(design.widgetURL)
         } else {

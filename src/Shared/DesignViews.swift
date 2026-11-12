@@ -37,6 +37,10 @@ extension Color {
 }
 
 extension WidgetDesign {
+    func imageLayout(for family: WidgetFamily) -> WidgetImageLayout {
+        imageLayouts[family.studioSizeKey] ?? WidgetImageLayout()
+    }
+
     func font(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         let design: Font.Design
         switch fontStyle {
@@ -53,6 +57,43 @@ extension WidgetDesign {
     var frameAlignment: SwiftUI.Alignment { alignment == .center ? .center : .bottomLeading }
 }
 
+extension WidgetFamily {
+    var studioSizeKey: String {
+        switch self {
+        case .systemMedium: return "medium"
+        case .systemLarge: return "large"
+        default: return "small"
+        }
+    }
+
+    var studioSizeLabel: String {
+        switch self {
+        case .systemMedium: return "중간"
+        case .systemLarge: return "크게"
+        default: return "작게"
+        }
+    }
+}
+
+/// 미리보기·사진·GIF의 모든 프레임에 같은 맞춤·확대·위치 계산을 사용한다.
+struct WidgetImageView: View {
+    let image: UIImage
+    let layout: WidgetImageLayout
+    var glass = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let rect = layout.imageRect(image: image.size, viewport: geometry.size)
+            Image(uiImage: image)
+                .resizable()
+                .widgetAccentedRenderingMode(glass ? .accentedDesaturated : .fullColor)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+        }
+        .clipped()
+    }
+}
+
 // MARK: - 배경
 
 /// 위젯 배경. containerBackground 로 쓰여, iOS 홈 화면이 틴트·클리어이면
@@ -60,19 +101,19 @@ extension WidgetDesign {
 struct DesignBackground: View {
     let design: WidgetDesign
     var photo: UIImage?
+    var family: WidgetFamily = .systemSmall
 
     var body: some View {
         ZStack {
-            if design.template.usesImage, let photo {
-                Image(uiImage: photo)
-                    .resizable()
-                    .scaledToFill()
-                Color.black.opacity(design.photoDimming)
-            } else if design.useGradient {
+            if design.useGradient {
                 LinearGradient(colors: [Color(hex: design.backgroundHex), Color(hex: design.gradientHex)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
             } else {
                 Color(hex: design.backgroundHex)
+            }
+            if design.template.usesImage, let photo {
+                WidgetImageView(image: photo, layout: design.imageLayout(for: family))
+                Color.black.opacity(design.photoDimming)
             }
         }
     }
@@ -82,12 +123,10 @@ struct DesignBackground: View {
 /// 시스템이 유리 위에 채도를 뺀 강조색으로 그리게 한다.
 struct GlassPhotoLayer: View {
     let photo: UIImage
+    var layout = WidgetImageLayout()
 
     var body: some View {
-        Image(uiImage: photo)
-            .resizable()
-            .widgetAccentedRenderingMode(.accentedDesaturated)
-            .scaledToFill()
+        WidgetImageView(image: photo, layout: layout, glass: true)
     }
 }
 
@@ -181,13 +220,6 @@ struct DesignContent: View {
 
     private var photoBody: some View {
         VStack(alignment: design.horizontalAlignment, spacing: 2 * scale) {
-            if design.template == .gif {
-                Label("GIF 재생", systemImage: "play.fill")
-                    .font(design.font(size: 11 * scale))
-                    .shadow(radius: glass ? 0 : 3)
-                    .widgetAccentable()
-                    .padding(.bottom, 4)
-            }
             if !design.title.isEmpty {
                 Text(design.title)
                     .font(design.font(size: 16 * scale, weight: .bold))
@@ -232,7 +264,7 @@ struct DesignPreviewCard: View {
                 .padding(16)
         }
         .frame(width: size.width, height: size.height)
-        .background(DesignBackground(design: design, photo: photo))
+        .background(DesignBackground(design: design, photo: photo, family: family))
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
     }

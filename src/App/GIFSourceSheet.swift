@@ -150,7 +150,7 @@ struct GIFSourceSheet: View {
                         .accessibilityIdentifier("preset-\(preset.id)")
                     }
                 }
-                Text("프리셋은 오프라인으로 사용할 수 있습니다. 홈 화면에서는 첫 장면이 표시되고, 위젯을 누르면 앱에서 반복 재생합니다.")
+                Text("프리셋은 앱을 열지 않아도 홈 화면 위젯에서 반복 재생됩니다. 네트워크 없이 사용할 수 있습니다.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             .padding(20)

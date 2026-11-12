@@ -25,6 +25,10 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>WidgetFonts/WSGIFMask.ttf</string>
+	</array>
 	<key>WSKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared</string>
 </dict>

@@ -58,6 +58,7 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
     var fontStyle: FontStyle = .rounded
     var alignment: Alignment = .leading
     var photoDimming: Double = 0.25
+    var imageLayouts: [String: WidgetImageLayout] = [:]
     var updatedAt: Date = .now
 
     var widgetURL: URL? {
@@ -82,7 +83,7 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
 extension WidgetDesign {
     enum CodingKeys: String, CodingKey {
         case id, name, template, title, subtitle, targetDate, backgroundHex, gradientHex, useGradient,
-             textHex, fontStyle, alignment, photoDimming, updatedAt
+             textHex, fontStyle, alignment, photoDimming, imageLayouts, updatedAt
     }
 
     /// 필드가 늘거나 줄어도 예전에 저장한 디자인을 읽을 수 있도록, 없는 키는 기본값으로 채우고 모르는 키는 버린다.
@@ -102,6 +103,7 @@ extension WidgetDesign {
         fontStyle = try c.decodeIfPresent(FontStyle.self, forKey: .fontStyle) ?? base.fontStyle
         alignment = try c.decodeIfPresent(Alignment.self, forKey: .alignment) ?? base.alignment
         photoDimming = try c.decodeIfPresent(Double.self, forKey: .photoDimming) ?? base.photoDimming
+        imageLayouts = try c.decodeIfPresent([String: WidgetImageLayout].self, forKey: .imageLayouts) ?? [:]
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
     }
 

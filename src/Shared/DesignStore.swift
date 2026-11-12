@@ -81,7 +81,25 @@ enum DesignStore {
         remove(photoKey(id))
     }
 
-    // MARK: - GIF (앱 전용 원본 + 위젯용 대표 PNG)
+    // MARK: - GIF (앱 전용 원본 + 공유 대표 PNG·위젯 프레임)
+
+    private static func gifFramesKey(_ id: UUID) -> String { "gif-frames.v1.\(id.uuidString)" }
+
+    static func loadGIFFrames(for id: UUID) -> [UIImage]? {
+        read(gifFramesKey(id)).flatMap(GIFWidgetFrames.images(from:))
+    }
+
+    static func hasGIFFrames(for id: UUID) -> Bool { read(gifFramesKey(id)) != nil }
+
+    /// 구버전 원본은 건드리지 않고 공유 프레임만 채운다. 변환 중 삭제·교체한 파일은 건너뛴다.
+    static func prepareGIFFrames(for id: UUID) -> Bool {
+        guard !hasGIFFrames(for: id), let data = loadGIFData(for: id),
+              let asset = try? GIFAsset(data: data),
+              let frames = try? GIFWidgetFrames(asset: asset).encoded(),
+              loadGIFData(for: id) == data, design(id: id)?.template == .gif,
+              !hasGIFFrames(for: id) else { return false }
+        return write(frames, gifFramesKey(id))
+    }
 
     private static func gifURL(_ id: UUID) -> URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -95,25 +113,31 @@ enum DesignStore {
 
     static func saveGIF(_ asset: GIFAsset, for id: UUID) throws {
         guard let poster = asset.poster.pngData() else { throw GIFAsset.ImportError.storage }
-        try storeGIF(asset.data, poster: poster, for: id)
+        let frames = try GIFWidgetFrames(asset: asset).encoded()
+        try storeGIF(asset.data, poster: poster, frames: frames, for: id)
     }
 
     static func copyGIF(from source: UUID, to destination: UUID) throws {
         guard let data = loadGIFData(for: source), let poster = read(photoKey(source)) else {
             throw GIFAsset.ImportError.storage
         }
-        try storeGIF(data, poster: poster, for: destination)
+        let frames = try read(gifFramesKey(source)) ?? GIFWidgetFrames(asset: GIFAsset(data: data)).encoded()
+        try storeGIF(data, poster: poster, frames: frames, for: destination)
     }
 
-    private static func storeGIF(_ data: Data, poster: Data, for id: UUID) throws {
+    private static func storeGIF(_ data: Data, poster: Data, frames: Data, for id: UUID) throws {
         let url = gifURL(id)
         let previous = loadGIFData(for: id)
+        let previousPoster = read(photoKey(id))
+        let previousFrames = read(gifFramesKey(id))
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        guard write(poster, photoKey(id)) else {
+        guard write(poster, photoKey(id)), write(frames, gifFramesKey(id)) else {
             // 공유 저장소 쓰기가 실패하면 기존 원본을 복구하고 디자인 저장을 중단한다.
             if let previous { try previous.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
             else { try FileManager.default.removeItem(at: url) }
+            if let previousPoster { write(previousPoster, photoKey(id)) } else { remove(photoKey(id)) }
+            if let previousFrames { write(previousFrames, gifFramesKey(id)) } else { remove(gifFramesKey(id)) }
             throw GIFAsset.ImportError.storage
         }
     }
@@ -121,6 +145,7 @@ enum DesignStore {
     static func deleteGIF(for id: UUID) throws {
         let url = gifURL(id)
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        remove(gifFramesKey(id))
     }
 
     /// 예전 판의 「스크린샷 잘라내기 유리」 데이터(스크린샷·잘라 낸 배경·위젯 크기)를 지운다. 한 번만 돈다.

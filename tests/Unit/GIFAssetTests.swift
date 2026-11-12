@@ -100,12 +100,43 @@ final class GIFAssetTests: XCTestCase {
         try DesignStore.copyGIF(from: source, to: copy)
         XCTAssertEqual(DesignStore.loadGIFData(for: copy), asset.data)
         XCTAssertNotNil(DesignStore.loadPhoto(for: copy))
+        XCTAssertEqual(DesignStore.loadGIFFrames(for: source)?.count, 16)
+        XCTAssertEqual(DesignStore.loadGIFFrames(for: copy)?.last?.pngData(),
+                       DesignStore.loadGIFFrames(for: source)?.last?.pngData())
         try DesignStore.deleteGIF(for: source)
         DesignStore.deletePhoto(for: source)
         XCTAssertNil(DesignStore.loadGIFData(for: source))
         XCTAssertNil(DesignStore.loadPhoto(for: source))
+        XCTAssertNil(DesignStore.loadGIFFrames(for: source))
+        XCTAssertNotNil(DesignStore.loadGIFFrames(for: copy))
         XCTAssertEqual(DesignStore.loadGIFData(for: copy), asset.data)
         XCTAssertThrowsError(try DesignStore.copyGIF(from: UUID(), to: UUID()))
+    }
+
+    func testWidgetFramesSampleTheEntireGIFUsingOriginalVariableDelays() throws {
+        let asset = try GIFAsset(data: fixture(colors: [.red, .blue], delays: [0.25, 0.75]))
+        let frames = try XCTUnwrap(GIFWidgetFrames.images(from: GIFWidgetFrames(asset: asset).encoded()))
+        XCTAssertEqual(frames.count, 16)
+        XCTAssertEqual(frames[0].pngData(), frames[3].pngData())
+        XCTAssertNotEqual(frames[3].pngData(), frames[4].pngData())
+        XCTAssertEqual(frames[4].pngData(), frames[15].pngData())
+    }
+
+    func testWidgetFramesHaveBoundedResolutionPreserveAlphaAndRejectDamagedPayloads() throws {
+        let asset = try GIFAsset(data: fixture(colors: [.clear, .red], size: CGSize(width: 600, height: 400)))
+        let stored = try GIFWidgetFrames(asset: asset)
+        let images = try XCTUnwrap(GIFWidgetFrames.images(from: stored.encoded()))
+        XCTAssertLessThanOrEqual(images[0].size.width, CGFloat(GIFWidgetFrames.maximumSide))
+        XCTAssertLessThanOrEqual(images[0].size.height, CGFloat(GIFWidgetFrames.maximumSide))
+        let cg = try XCTUnwrap(images[0].cgImage)
+        var pixel = [UInt8](repeating: 255, count: 4)
+        let c = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.clear(CGRect(x: 0, y: 0, width: 1, height: 1))
+        c.draw(cg, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        XCTAssertEqual(pixel[3], 0)
+        XCTAssertNil(GIFWidgetFrames.images(from: Data("broken".utf8)))
+        XCTAssertNil(GIFWidgetFrames.images(from: try PropertyListEncoder().encode(["pngs": Array(stored.pngs.prefix(15))])))
     }
 
     func testWidgetTapOpensGIFPlayerAndOtherDesignsStillOpenEditor() {

@@ -2,7 +2,7 @@ import ImageIO
 import UIKit
 import UniformTypeIdentifiers
 
-/// 원본 GIF와 프레임 정보. 위젯은 이 객체를 만들지 않고 저장된 대표 이미지만 읽는다.
+/// 원본 GIF와 프레임 정보. 위젯은 원본 대신 앱이 변환한 작은 PNG 장면들을 읽는다.
 final class GIFAsset {
     static let maximumBytes = 12 * 1024 * 1024
     static let maximumFrames = 300
@@ -77,6 +77,10 @@ final class GIFAsset {
     func frame(at index: Int) -> UIImage? {
         guard delays.indices.contains(index) else { return nil }
         return Self.frame(source: source, index: index, maxSide: 600)
+    }
+
+    func widgetFrame(at elapsed: TimeInterval) -> UIImage? {
+        Self.frame(source: source, index: frameIndex(at: elapsed), maxSide: GIFWidgetFrames.maximumSide)
     }
 
     private static func frame(source: CGImageSource, index: Int, maxSide: Int) -> UIImage? {
