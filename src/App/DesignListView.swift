@@ -2,11 +2,21 @@ import SwiftUI
 
 struct DesignListView: View {
     @Environment(DesignLibrary.self) private var library
-    @State private var editing: WidgetDesign?
-    @State private var showGuide = false
+    @State private var sheet: Sheet?
     @AppStorage("wallpaper") private var wallpaper: Wallpaper.Style = .dusk
 
     private let columns = [GridItem(.adaptive(minimum: 158), spacing: 18)]
+
+    private enum Sheet: Identifiable {
+        case editor(WidgetDesign), player(WidgetDesign), guide
+        var id: String {
+            switch self {
+            case .editor(let design): return "edit-\(design.id)"
+            case .player(let design): return "play-\(design.id)"
+            case .guide: return "guide"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -33,7 +43,7 @@ struct DesignListView: View {
             .navigationTitle("위젯 스튜디오")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("홈 화면에 놓는 법", systemImage: "questionmark") { showGuide = true }
+                    Button("홈 화면에 놓는 법", systemImage: "questionmark") { sheet = .guide }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -46,34 +56,47 @@ struct DesignListView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                CreateBar { template in editing = .blank(template) }
+                CreateBar { template in sheet = .editor(.blank(template)) }
                     .padding(.bottom, 8)
             }
-            .sheet(item: $editing) { design in
-                DesignEditorView(design: design, wallpaper: wallpaper) { saved in library.upsert(saved) }
+            .sheet(item: $sheet) { item in
+                switch item {
+                case .editor(let design):
+                    DesignEditorView(design: design, wallpaper: wallpaper) { saved in library.upsert(saved) }
+                case .player(let design): GIFPlayerScreen(design: design)
+                case .guide: GuideView()
+                }
             }
-            .sheet(isPresented: $showGuide) { GuideView() }
+            .alert("작업을 완료할 수 없습니다", isPresented: Binding(
+                get: { library.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) { library.errorMessage = nil }
+            } message: { Text(library.errorMessage ?? "") }
             .preferredColorScheme(wallpaper.colorScheme)
             .task {
                 // 개발용: `simctl launch … -openDesign <UUID>` 로 편집 화면을 바로 연다.
                 if let raw = UserDefaults.standard.string(forKey: "openDesign"),
                    let id = UUID(uuidString: raw) {
                     try? await Task.sleep(for: .milliseconds(600))
-                    editing = library.designs.first { $0.id == id }
+                    if let design = library.designs.first(where: { $0.id == id }) { sheet = .editor(design) }
                 }
             }
             .onOpenURL { url in
                 // widgetstudio://design/<UUID> — 위젯을 누르면 그 디자인 편집으로 연다.
-                guard url.host == "design",
+                guard url.scheme == "widgetstudio", ["design", "play"].contains(url.host ?? ""),
                       let id = UUID(uuidString: url.lastPathComponent),
                       let design = library.designs.first(where: { $0.id == id }) else { return }
-                editing = design
+                if url.host == "play", design.template == .gif {
+                    sheet = .player(design)
+                } else {
+                    sheet = .editor(design)
+                }
             }
         }
     }
 
     private func card(_ design: WidgetDesign) -> some View {
-        Button { editing = design } label: {
+        Button { sheet = .editor(design) } label: {
             VStack(spacing: 10) {
                 DesignPreviewCard(design: design,
                                   photo: DesignStore.loadPhoto(for: design.id))
@@ -86,7 +109,11 @@ struct DesignListView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("design-\(design.id.uuidString)")
         .contextMenu {
+            if design.template == .gif {
+                Button("GIF 재생", systemImage: "play.fill") { sheet = .player(design) }
+            }
             Button("복제", systemImage: "plus.square.on.square") { library.duplicate(design) }
             Button("삭제", systemImage: "trash", role: .destructive) {
                 if let i = library.designs.firstIndex(of: design) {
@@ -107,7 +134,7 @@ struct CreateBar: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 14) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if expanded {
                     ForEach(WidgetDesign.Template.allCases) { t in
                         Button {
@@ -118,10 +145,12 @@ struct CreateBar: View {
                                 Image(systemName: t.symbol).font(.title3)
                                 Text(t.label).font(.caption2.weight(.medium))
                             }
-                            .frame(width: 62, height: 58)
+                            .frame(width: 50, height: 58)
                             .contentShape(.rect(cornerRadius: 22))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(t.label)
+                        .accessibilityIdentifier("create-\(t.rawValue)")
                         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
                         .glassEffectID(t.rawValue, in: ns)
                     }
@@ -156,6 +185,8 @@ extension WidgetDesign {
             return WidgetDesign(name: "새 D-day", template: .countdown, title: "기념일")
         case .photo:
             return WidgetDesign(name: "새 사진", template: .photo, title: "", alignment: .leading)
+        case .gif:
+            return WidgetDesign(name: "새 GIF", template: .gif, title: "", alignment: .leading)
         }
     }
 }
@@ -174,6 +205,10 @@ struct GuideView: View {
                 Section("보여 줄 디자인 바꾸기") {
                     Label("놓은 위젯을 길게 눌러 「위젯 편집」을 고릅니다.", systemImage: "hand.tap")
                     Label("「디자인」에서 이 앱에서 만든 디자인을 고릅니다.", systemImage: "paintpalette")
+                }
+                Section("GIF 위젯") {
+                    Label("+ 에서 GIF를 골라 사진 보관함이나 파일에서 가져옵니다. 12MB·300프레임 이하의 GIF를 사용할 수 있습니다.", systemImage: "photo.on.rectangle")
+                    Label("홈 화면에는 첫 장면이 표시되고, 위젯을 누르면 앱에서 반복 재생합니다. 앱의 디자인을 길게 눌러서도 재생할 수 있습니다.", systemImage: "play.rectangle")
                 }
                 Section("투명(Liquid Glass) 위젯") {
                     Label("위젯의 모습은 iOS 홈 화면 설정만 따릅니다. 홈 화면 「편집」→「사용자화」에서 클리어·틴트를 고르면 위젯 배경이 유리로 바뀝니다.",

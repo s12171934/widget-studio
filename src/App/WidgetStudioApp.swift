@@ -5,6 +5,7 @@ import WidgetKit
 @Observable
 final class DesignLibrary {
     var designs: [WidgetDesign] = []
+    var errorMessage: String?
 
     init() {
         DesignStore.seedIfNeeded()
@@ -24,8 +25,13 @@ final class DesignLibrary {
     }
 
     func delete(at offsets: IndexSet) {
-        for i in offsets { DesignStore.deletePhoto(for: designs[i].id) }
-        designs.remove(atOffsets: offsets)
+        for i in offsets.sorted(by: >) {
+            do {
+                try DesignStore.deleteGIF(for: designs[i].id)
+                DesignStore.deletePhoto(for: designs[i].id)
+                designs.remove(at: i)
+            } catch { errorMessage = error.localizedDescription }
+        }
         persist()
     }
 
@@ -33,7 +39,10 @@ final class DesignLibrary {
         var copy = design
         copy.id = UUID()
         copy.name = design.name + " 복사본"
-        if let photo = DesignStore.loadPhoto(for: design.id) {
+        if design.template == .gif {
+            do { try DesignStore.copyGIF(from: design.id, to: copy.id) }
+            catch { errorMessage = error.localizedDescription; return }
+        } else if let photo = DesignStore.loadPhoto(for: design.id) {
             DesignStore.savePhoto(photo, for: copy.id)
         }
         upsert(copy)

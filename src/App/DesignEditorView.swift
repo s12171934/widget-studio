@@ -1,6 +1,7 @@
 import PhotosUI
 import SwiftUI
 import WidgetKit
+import UniformTypeIdentifiers
 
 struct DesignEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -9,6 +10,14 @@ struct DesignEditorView: View {
     @State private var photo: UIImage?
     @State private var photoItem: PhotosPickerItem?
     @State private var photoChanged = false
+    @State private var gif: GIFAsset?
+    @State private var gifItem: PhotosPickerItem?
+    @State private var gifChanged = false
+    @State private var importingGIF = false
+    @State private var showGIFFilePicker = false
+    @State private var showGIFPlayer = false
+    @State private var gifError: String?
+    @State private var gifRequest = UUID()
     let wallpaper: Wallpaper.Style
     let onSave: (WidgetDesign) -> Void
 
@@ -36,7 +45,9 @@ struct DesignEditorView: View {
                     }
                 }
                 contentSection
-                if design.template == .photo {
+                if design.template == .gif {
+                    gifSection
+                } else if design.template == .photo {
                     photoSection
                 } else {
                     backgroundSection
@@ -63,6 +74,8 @@ struct DesignEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장", systemImage: "checkmark") { save() }
                         .buttonStyle(.glassProminent)
+                        .disabled(importingGIF || (design.template == .gif && gif == nil))
+                        .accessibilityIdentifier("save-design")
                 }
             }
             .onChange(of: photoItem) { _, item in
@@ -73,12 +86,50 @@ struct DesignEditorView: View {
                     photoChanged = true
                 }
             }
+            .task {
+                guard design.template == .gif else { return }
+                let id = design.id
+                await loadGIF(changed: false) {
+                    try await Task.detached(priority: .userInitiated) {
+                        guard let data = DesignStore.loadGIFData(for: id) else { throw GIFAsset.ImportError.invalid }
+                        return try GIFAsset(data: data)
+                    }.value
+                }
+            }
+            .task(id: gifItem) {
+                guard let item = gifItem else { return }
+                await loadGIF(changed: true) {
+                    guard let data = try await item.loadTransferable(type: Data.self) else { throw GIFAsset.ImportError.invalid }
+                    return try await Task.detached(priority: .userInitiated) { try GIFAsset(data: data) }.value
+                }
+            }
+            .fileImporter(isPresented: $showGIFFilePicker, allowedContentTypes: [.gif]) { result in
+                switch result {
+                case .success(let url):
+                    Task {
+                        await loadGIF(changed: true) {
+                            try await Task.detached(priority: .userInitiated) { try GIFAsset.readFile(url) }.value
+                        }
+                    }
+                case .failure(let error):
+                    if (error as NSError).code != NSUserCancelledError { gifError = error.localizedDescription }
+                }
+            }
+            .sheet(isPresented: $showGIFPlayer) {
+                GIFPlayerScreen(design: design, preview: gif)
+            }
+            .alert("GIF 작업을 완료할 수 없습니다", isPresented: Binding(
+                get: { gifError != nil }, set: { if !$0 { gifError = nil } }
+            )) {
+                Button("확인", role: .cancel) { gifError = nil }
+            } message: { Text(gifError ?? "") }
+            .onDisappear { gifRequest = UUID() }
         }
     }
 
     // MARK: 섹션
 
-    /// 배경화면 위에 실제 크기의 위젯을 띄우고, 크기와 홈 화면 표시 방식을 유리 선택기로 바꾼다.
+    /// 배경화면 위에 실제 크기의 위젯을 띄우고, 크기를 유리 선택기로 바꾼다.
     private var previewSection: some View {
         Section {
             VStack(spacing: 16) {
@@ -114,7 +165,7 @@ struct DesignEditorView: View {
                 TextField("제목", text: $design.title)
                 DatePicker("날짜", selection: $design.targetDate, displayedComponents: .date)
                 LabeledContent("오늘 기준", value: design.dDayLabel(from: .now))
-            case .photo:
+            case .photo, .gif:
                 TextField("제목 (선택)", text: $design.title)
                 TextField("보조 문구 (선택)", text: $design.subtitle)
             }
@@ -161,7 +212,49 @@ struct DesignEditorView: View {
         }
     }
 
+    private var gifSection: some View {
+        Section {
+            PhotosPicker(selection: $gifItem, matching: .images, preferredItemEncoding: .current) {
+                Label("사진 보관함에서 GIF 고르기", systemImage: "photo.on.rectangle")
+            }
+            .accessibilityIdentifier("pick-gif-photos")
+            Button("파일에서 GIF 고르기", systemImage: "folder") { showGIFFilePicker = true }
+            if importingGIF { ProgressView("GIF 가져오는 중") }
+            if let gif {
+                LabeledContent("GIF", value: "\(gif.delays.count)프레임 · \(gif.duration.formatted(.number.precision(.fractionLength(1))))초")
+                    .accessibilityIdentifier("gif-metadata")
+                Button("GIF 재생", systemImage: "play.fill") { showGIFPlayer = true }
+                    .accessibilityIdentifier("preview-gif")
+            }
+            VStack(alignment: .leading) {
+                Text("어둡게 \(Int(design.photoDimming * 100))%")
+                Slider(value: $design.photoDimming, in: 0...0.7)
+            }
+        } header: { Text("GIF") }
+        footer: {
+            Text("홈 화면에는 첫 장면이 표시됩니다. 위젯을 누르면 앱에서 반복 재생합니다. GIF는 12MB·300프레임 이하로 골라 주세요.")
+        }
+    }
+
     // MARK: 동작
+
+    @MainActor
+    private func loadGIF(changed: Bool, make: () async throws -> GIFAsset) async {
+        let request = UUID()
+        gifRequest = request
+        importingGIF = true
+        defer { if gifRequest == request { importingGIF = false } }
+        do {
+            let loaded = try await make()
+            guard !Task.isCancelled, gifRequest == request else { return }
+            gif = loaded
+            photo = loaded.poster
+            if changed { gifChanged = true; photoChanged = true }
+        } catch is CancellationError { }
+        catch {
+            if !Task.isCancelled, gifRequest == request { gifError = error.localizedDescription }
+        }
+    }
 
     private func hexBinding(_ keyPath: WritableKeyPath<WidgetDesign, String>) -> Binding<Color> {
         Binding(
@@ -171,8 +264,17 @@ struct DesignEditorView: View {
     }
 
     private func save() {
-        if photoChanged, let photo {
-            DesignStore.savePhoto(photo, for: design.id)
+        do {
+            if design.template == .gif {
+                guard let gif else { return }
+                if gifChanged { try DesignStore.saveGIF(gif, for: design.id) }
+            } else {
+                try DesignStore.deleteGIF(for: design.id)
+                if photoChanged, let photo { DesignStore.savePhoto(photo, for: design.id) }
+            }
+        } catch {
+            gifError = error.localizedDescription
+            return
         }
         if design.name.trimmingCharacters(in: .whitespaces).isEmpty {
             design.name = design.template.label

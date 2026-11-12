@@ -63,7 +63,7 @@ struct DesignBackground: View {
 
     var body: some View {
         ZStack {
-            if design.template == .photo, let photo {
+            if design.template.usesImage, let photo {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFill()
@@ -118,7 +118,7 @@ struct DesignContent: View {
             case .text: textBody
             case .clock: clockBody
             case .countdown: countdownBody
-            case .photo: photoBody
+            case .photo, .gif: photoBody
             }
         }
         .foregroundStyle(textColor)
@@ -181,6 +181,12 @@ struct DesignContent: View {
 
     private var photoBody: some View {
         VStack(alignment: design.horizontalAlignment, spacing: 2 * scale) {
+            if design.template == .gif {
+                Label("GIF 재생", systemImage: "play.fill")
+                    .font(design.font(size: 11 * scale))
+                    .widgetAccentable()
+                    .padding(.bottom, 4)
+            }
             if !design.title.isEmpty {
                 Text(design.title)
                     .font(design.font(size: 16 * scale, weight: .bold))

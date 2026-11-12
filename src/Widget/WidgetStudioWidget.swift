@@ -87,7 +87,7 @@ struct DesignProvider: AppIntentTimelineProvider {
                 entries.append(DesignEntry(date: day, design: design))
             }
             return Timeline(entries: entries, policy: .atEnd)
-        case .text, .photo:
+        case .text, .photo, .gif:
             return Timeline(entries: [DesignEntry(date: now, design: design)], policy: .never)
         }
     }
@@ -113,7 +113,7 @@ struct WidgetStudioEntryView: View {
 
     var body: some View {
         if let design = entry.design {
-            let photo = design.template == .photo ? DesignStore.loadPhoto(for: design.id) : nil
+            let photo = design.template.usesImage ? DesignStore.loadPhoto(for: design.id) : nil
             ZStack {
                 // 유리 모드에서는 배경이 걷히므로 사진을 내용 층에 올려 유리 위에 단색으로 남긴다.
                 if isGlass, let photo {
@@ -128,7 +128,7 @@ struct WidgetStudioEntryView: View {
             .containerBackground(for: .widget) {
                 DesignBackground(design: design, photo: photo)
             }
-            .widgetURL(URL(string: "widgetstudio://design/\(design.id.uuidString)"))
+            .widgetURL(design.widgetURL)
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "paintpalette")

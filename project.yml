@@ -26,7 +26,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: 위젯 스튜디오
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: 위젯 배경으로 쓸 사진을 고릅니다.
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: 위젯에 쓸 사진이나 GIF를 고릅니다.
         # 실기기는 키체인 공유(무료 팀 가능), 시뮬레이터는 App Group.
         "CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]": src/App/WidgetStudio.device.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": src/App/WidgetStudio.entitlements
@@ -40,6 +40,24 @@ targets:
         WSKeychainGroup: $(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared
     dependencies:
       - target: WidgetStudioWidget
+  WidgetStudioTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [tests/Unit]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: WidgetStudio
+  WidgetStudioUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [tests/UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: WidgetStudio
   WidgetStudioWidget:
     type: app-extension
     platform: iOS
@@ -59,3 +77,12 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         WSKeychainGroup: $(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared
+schemes:
+  WidgetStudio:
+    build:
+      targets:
+        WidgetStudio: all
+    test:
+      targets:
+        - WidgetStudioTests
+        - WidgetStudioUITests

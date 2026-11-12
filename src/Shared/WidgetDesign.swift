@@ -3,14 +3,16 @@ import Foundation
 /// 위젯 디자인 한 개. 앱이 만들고, 위젯 확장이 읽는다.
 struct WidgetDesign: Codable, Identifiable, Hashable {
     enum Template: String, Codable, CaseIterable, Identifiable {
-        case text, clock, countdown, photo
+        case text, clock, countdown, photo, gif
         var id: String { rawValue }
+        var usesImage: Bool { self == .photo || self == .gif }
         var label: String {
             switch self {
             case .text: return "문구"
             case .clock: return "시계"
             case .countdown: return "D-day"
             case .photo: return "사진"
+            case .gif: return "GIF"
             }
         }
         var symbol: String {
@@ -19,6 +21,7 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
             case .clock: return "clock"
             case .countdown: return "calendar.badge.clock"
             case .photo: return "photo"
+            case .gif: return "play.rectangle"
             }
         }
     }
@@ -56,6 +59,10 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
     var alignment: Alignment = .leading
     var photoDimming: Double = 0.25
     var updatedAt: Date = .now
+
+    var widgetURL: URL? {
+        URL(string: "widgetstudio://\(template == .gif ? "play" : "design")/\(id.uuidString)")
+    }
 
     /// 기준일(date)에서 목표일까지 남은 날짜 수. 지난 날짜면 음수.
     func daysRemaining(from date: Date) -> Int {

@@ -81,6 +81,48 @@ enum DesignStore {
         remove(photoKey(id))
     }
 
+    // MARK: - GIF (앱 전용 원본 + 위젯용 대표 PNG)
+
+    private static func gifURL(_ id: UUID) -> URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("GIFs", isDirectory: true)
+            .appendingPathComponent("\(id.uuidString).gif")
+    }
+
+    static func loadGIFData(for id: UUID) -> Data? {
+        try? Data(contentsOf: gifURL(id))
+    }
+
+    static func saveGIF(_ asset: GIFAsset, for id: UUID) throws {
+        guard let poster = asset.poster.pngData() else { throw GIFAsset.ImportError.storage }
+        try storeGIF(asset.data, poster: poster, for: id)
+    }
+
+    static func copyGIF(from source: UUID, to destination: UUID) throws {
+        guard let data = loadGIFData(for: source), let poster = read(photoKey(source)) else {
+            throw GIFAsset.ImportError.storage
+        }
+        try storeGIF(data, poster: poster, for: destination)
+    }
+
+    private static func storeGIF(_ data: Data, poster: Data, for id: UUID) throws {
+        let url = gifURL(id)
+        let previous = loadGIFData(for: id)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        guard write(poster, photoKey(id)) else {
+            // 공유 저장소 쓰기가 실패하면 기존 원본을 복구하고 디자인 저장을 중단한다.
+            if let previous { try previous.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
+            else { try FileManager.default.removeItem(at: url) }
+            throw GIFAsset.ImportError.storage
+        }
+    }
+
+    static func deleteGIF(for id: UUID) throws {
+        let url = gifURL(id)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+    }
+
     /// 예전 판의 「스크린샷 잘라내기 유리」 데이터(스크린샷·잘라 낸 배경·위젯 크기)를 지운다. 한 번만 돈다.
     static func removeLegacyGlassData() {
         guard read("legacyGlassRemoved.v1") == nil else { return }
