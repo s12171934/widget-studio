@@ -1,0 +1,4 @@
+.build/
+WidgetStudio.xcodeproj/
+xcuserdata/
+.DS_Store

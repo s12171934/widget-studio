@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# widget-studio — 프로젝트 생성·시뮬레이터 빌드·실행
+#   bin/widget-studio gen                 xcodegen 으로 WidgetStudio.xcodeproj 생성
+#   bin/widget-studio build               시뮬레이터용 빌드 (.build/ 에 산출)
+#   bin/widget-studio run [기기 이름]     빌드 → 시뮬레이터 부팅 → 설치 → 실행 (기본: iPhone 17)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+DERIVED="$ROOT/.build"
+APP="$DERIVED/Build/Products/Debug-iphonesimulator/WidgetStudio.app"
+BUNDLE_ID="io.github.s12171934.widgetstudio"
+
+gen() {
+  command -v xcodegen >/dev/null || { echo "xcodegen 이 필요합니다: brew install xcodegen" >&2; exit 1; }
+  (cd "$ROOT" && xcodegen generate --quiet)
+}
+
+build() {
+  gen
+  xcodebuild -project "$ROOT/WidgetStudio.xcodeproj" -scheme WidgetStudio \
+    -destination 'generic/platform=iOS Simulator' -configuration Debug \
+    -derivedDataPath "$DERIVED" build -quiet
+  echo "빌드 완료: $APP"
+}
+
+run() {
+  local device="${1:-iPhone 17}"
+  build
+  xcrun simctl boot "$device" 2>/dev/null || true
+  open -g "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true
+  xcrun simctl install "$device" "$APP"
+  xcrun simctl launch "$device" "$BUNDLE_ID"
+}
+
+case "${1:-}" in
+  gen) gen ;;
+  build) build ;;
+  run) shift; run "$@" ;;
+  *) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
