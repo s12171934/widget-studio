@@ -8,6 +8,7 @@ final class DesignLibrary {
 
     init() {
         DesignStore.seedIfNeeded()
+        DesignStore.removeLegacyGlassData()
         designs = DesignStore.load()
     }
 

@@ -59,23 +59,3 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         WSKeychainGroup: $(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared
-  WidgetStudioUITests:
-    type: bundle.ui-testing
-    platform: iOS
-    sources:
-      - tests/UITests
-    dependencies:
-      - target: WidgetStudio
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: WidgetStudio
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.s12171934.widgetstudio.uitests
-schemes:
-  WidgetStudio:
-    build:
-      targets:
-        WidgetStudio: all
-    test:
-      targets:
-        - WidgetStudioUITests

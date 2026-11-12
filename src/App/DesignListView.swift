@@ -4,7 +4,6 @@ struct DesignListView: View {
     @Environment(DesignLibrary.self) private var library
     @State private var editing: WidgetDesign?
     @State private var showGuide = false
-    @State private var appearance: HomeAppearance = .standard
     @AppStorage("wallpaper") private var wallpaper: Wallpaper.Style = .dusk
 
     private let columns = [GridItem(.adaptive(minimum: 158), spacing: 18)]
@@ -13,10 +12,6 @@ struct DesignListView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    GlassSegmented(options: HomeAppearance.allCases, selection: $appearance,
-                                   label: \.label)
-                        .padding(.horizontal)
-
                     if library.designs.isEmpty {
                         ContentUnavailableView("디자인이 없습니다", systemImage: "paintpalette",
                                                description: Text("아래 + 로 첫 위젯을 만들어 보세요."))
@@ -66,26 +61,6 @@ struct DesignListView: View {
                     try? await Task.sleep(for: .milliseconds(600))
                     editing = library.designs.first { $0.id == id }
                 }
-                // 개발용(UI 테스트): `-glassTestShot <png 경로> -glassTestRect x,y,w,h` —
-                // 첫 디자인을 흐림·어둡게 0 인 유리 배경으로 바꿔, 위젯 배경이 원래 화면과 겹치는지 잰다.
-                if let path = UserDefaults.standard.string(forKey: "glassTestShot"),
-                   let shot = UIImage(contentsOfFile: path),
-                   let raw = UserDefaults.standard.string(forKey: "glassTestRect"),
-                   case let v = raw.split(separator: ",").compactMap({ Double($0) }), v.count == 4,
-                   var first = library.designs.first {
-                    DesignStore.saveWallpaper(shot)
-                    first.backgroundStyle = .glass
-                    first.glassBlur = 0
-                    first.glassDim = 0
-                    first.glassRects["small"] = GlassRect(CGRect(x: v[0], y: v[1], width: v[2], height: v[3]))
-                    GlassRenderer.renderAll(first)
-                    library.upsert(first)
-                }
-                // 개발용: `-appearance tinted|clear` 로 목록의 표시 방식을 고른다.
-                if let raw = UserDefaults.standard.string(forKey: "appearance"),
-                   let a = HomeAppearance(rawValue: raw) {
-                    appearance = a
-                }
             }
             .onOpenURL { url in
                 // widgetstudio://design/<UUID> — 위젯을 누르면 그 디자인 편집으로 연다.
@@ -101,9 +76,7 @@ struct DesignListView: View {
         Button { editing = design } label: {
             VStack(spacing: 10) {
                 DesignPreviewCard(design: design,
-                                  photo: DesignStore.loadPhoto(for: design.id),
-                                  appearance: appearance,
-                                  tint: wallpaper.homeTint)
+                                  photo: DesignStore.loadPhoto(for: design.id))
                 Text(design.name)
                     .font(.footnote.weight(.semibold))
                     .lineLimit(1)
@@ -202,10 +175,10 @@ struct GuideView: View {
                     Label("놓은 위젯을 길게 눌러 「위젯 편집」을 고릅니다.", systemImage: "hand.tap")
                     Label("「디자인」에서 이 앱에서 만든 디자인을 고릅니다.", systemImage: "paintpalette")
                 }
-                Section("Liquid Glass 홈 화면") {
-                    Label("홈 화면 「편집」→「사용자화」에서 틴트·클리어를 고르면 위젯 배경이 유리로 바뀝니다.",
+                Section("투명(Liquid Glass) 위젯") {
+                    Label("위젯의 모습은 iOS 홈 화면 설정만 따릅니다. 홈 화면 「편집」→「사용자화」에서 클리어·틴트를 고르면 위젯 배경이 유리로 바뀝니다.",
                           systemImage: "drop")
-                    Label("이때 시각·D-day 숫자·제목은 강조 색으로, 나머지 글자는 흐리게 그려집니다. 목록 위 선택기로 미리 볼 수 있어요.",
+                    Label("이때 시각·D-day 숫자·제목은 또렷하게, 나머지 글자는 흐리게 그려집니다.",
                           systemImage: "eye")
                 }
             }

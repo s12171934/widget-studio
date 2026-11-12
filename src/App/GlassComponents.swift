@@ -17,14 +17,6 @@ struct Wallpaper: View {
         }
         /// 배경화면 위 글자·막대가 읽히도록 앱의 라이트/다크를 배경화면에 맞춘다.
         var colorScheme: ColorScheme { self == .bloom ? .light : .dark }
-        /// 틴트 홈 화면은 모든 위젯에 같은 색을 입힌다. 배경화면에 어울리는 틴트를 하나 둔다.
-        var homeTint: Color {
-            switch self {
-            case .dusk: return Color(hex: "#FB923C")
-            case .ocean: return Color(hex: "#67E8F9")
-            case .bloom: return Color(hex: "#C026D3")
-            }
-        }
         var colors: [Color] {
             switch self {
             case .dusk:

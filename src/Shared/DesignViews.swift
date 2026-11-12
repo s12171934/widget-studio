@@ -53,40 +53,17 @@ extension WidgetDesign {
     var frameAlignment: SwiftUI.Alignment { alignment == .center ? .center : .bottomLeading }
 }
 
-// MARK: - 홈 화면 표시 방식
-
-/// iOS 26 홈 화면의 아이콘·위젯 스타일. 틴트·클리어에서는 위젯 배경이 Liquid Glass 로 바뀌고
-/// 글자는 강조(accent) 그룹과 나머지로 나뉘어 단색으로 그려진다.
-enum HomeAppearance: String, CaseIterable, Identifiable {
-    case standard, tinted, clear
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .standard: return "기본"
-        case .tinted: return "틴트"
-        case .clear: return "클리어"
-        }
-    }
-    var isGlass: Bool { self != .standard }
-}
-
 // MARK: - 배경
 
-/// 기본(전체 색) 모드의 위젯 배경. 위젯에서는 containerBackground 로 쓰여,
-/// 틴트·클리어 모드에서는 시스템이 걷어 내고 유리로 바꾼다.
+/// 위젯 배경. containerBackground 로 쓰여, iOS 홈 화면이 틴트·클리어이면
+/// 시스템이 걷어 내고 Liquid Glass 로 바꾼다. 어떤 모습이 될지는 iOS 홈 화면 설정만 정한다.
 struct DesignBackground: View {
     let design: WidgetDesign
     var photo: UIImage?
-    /// 유리(투명) 배경 그림 — 앱이 배경화면에서 잘라 흐리게 만든 것.
-    var glass: UIImage?
-    /// nil 이면 위젯 모양(ContainerRelativeShape)을 따른다.
-    var cornerRadius: CGFloat?
 
     var body: some View {
         ZStack {
-            if design.usesGlass {
-                GlassBackdrop(image: glass, cornerRadius: cornerRadius)
-            } else if design.template == .photo, let photo {
+            if design.template == .photo, let photo {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFill()
@@ -101,74 +78,16 @@ struct DesignBackground: View {
     }
 }
 
-/// 배경화면 조각 위에 Liquid Glass 의 테두리 빛과 위쪽 하이라이트를 얹는다.
-/// 위젯은 배경화면을 볼 수 없으므로, 그 자리의 배경화면을 미리 잘라 깔아 투명해 보이게 한다.
-struct GlassBackdrop: View {
-    let image: UIImage?
-    var cornerRadius: CGFloat?
-
-    var body: some View {
-        ZStack {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-            } else {
-                // 아직 자리를 맞추지 않았을 때: 배경화면 없이 반투명 유리 느낌만.
-                LinearGradient(colors: [Color(white: 0.55), Color(white: 0.28)],
-                               startPoint: .top, endPoint: .bottom)
-            }
-            // Liquid Glass 클리어처럼 거의 투명하게: 위쪽 가장자리에만 옅은 빛.
-            LinearGradient(colors: [.white.opacity(0.10), .clear],
-                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.22))
-            edge
-        }
-    }
-
-    @ViewBuilder
-    private var edge: some View {
-        let stroke = LinearGradient(colors: [.white.opacity(0.6), .white.opacity(0.08), .white.opacity(0.28)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing)
-        if let cornerRadius {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(stroke, lineWidth: 1.2)
-        } else {
-            ContainerRelativeShape()
-                .strokeBorder(stroke, lineWidth: 1.2)
-        }
-    }
-}
-
-extension WidgetFamily {
-    var glassFamily: GlassFamily {
-        switch self {
-        case .systemMedium: return .medium
-        case .systemLarge, .systemExtraLarge: return .large
-        default: return .small
-        }
-    }
-}
-
-/// 유리 모드에서 사진 템플릿은 배경이 걷히므로, 사진을 내용 층으로 올려
-/// 시스템이 유리 위에 단색(채도 뺀 강조색)으로 그리게 한다.
+/// 틴트·클리어 홈 화면에서 사진 템플릿은 배경이 걷히므로, 사진을 내용 층으로 올려
+/// 시스템이 유리 위에 채도를 뺀 강조색으로 그리게 한다.
 struct GlassPhotoLayer: View {
     let photo: UIImage
-    /// 앱 미리보기는 시스템 렌더링이 없으므로 흑백·투명도로 흉내 낸다.
-    var simulate = false
 
     var body: some View {
-        if simulate {
-            Image(uiImage: photo)
-                .resizable()
-                .scaledToFill()
-                .grayscale(1)
-                .opacity(0.55)
-                .blendMode(.plusLighter)
-        } else {
-            Image(uiImage: photo)
-                .resizable()
-                .widgetAccentedRenderingMode(.accentedDesaturated)
-                .scaledToFill()
-        }
+        Image(uiImage: photo)
+            .resizable()
+            .widgetAccentedRenderingMode(.accentedDesaturated)
+            .scaledToFill()
     }
 }
 
@@ -178,10 +97,9 @@ struct DesignContent: View {
     let design: WidgetDesign
     let family: WidgetFamily
     let date: Date
-    /// 틴트·클리어(유리) 모드. 사용자 글자 색 대신 단색으로 그리고, 강조 그룹만 또렷하게 둔다.
+    /// iOS 홈 화면이 틴트·클리어일 때(widgetRenderingMode == .accented). 사용자 글자 색 대신
+    /// 단색으로 그리고, 강조 그룹만 또렷하게 둔다. 앱 안에서는 항상 false.
     var glass = false
-    /// 유리 모드의 글자 색(앱 미리보기에서 틴트 색을 흉내 낼 때만 바꾼다).
-    var glassColor: Color = .white
 
     private var isSmall: Bool { family == .systemSmall }
     private var scale: CGFloat {
@@ -190,7 +108,7 @@ struct DesignContent: View {
         default: return 1
         }
     }
-    private var textColor: Color { glass ? glassColor : Color(hex: design.textHex) }
+    private var textColor: Color { glass ? .white : Color(hex: design.textHex) }
     /// 유리 모드에서 강조가 아닌 글자는 한 단계 흐리게.
     private var secondaryOpacity: Double { glass ? 0.62 : 0.8 }
 
@@ -282,23 +200,12 @@ struct DesignContent: View {
 
 // MARK: - 앱 안 미리보기 카드
 
-/// 홈 화면 위젯과 같은 크기 비율로 디자인을 그려 보여 준다.
-/// 유리 모드는 실제 Liquid Glass 로 그려 뒤의 배경화면을 굴절시킨다.
+/// 홈 화면 위젯(기본 모드)과 같은 크기 비율로 디자인을 그려 보여 준다.
 struct DesignPreviewCard: View {
     let design: WidgetDesign
     var family: WidgetFamily = .systemSmall
     var photo: UIImage?
     var date: Date?
-    var appearance: HomeAppearance = .standard
-    /// 틴트 모드에서 홈 화면이 입히는 색.
-    var tint: Color = .blue
-    /// 유리(투명) 배경 그림. nil 이면 저장소에서 이 크기의 것을 읽는다.
-    var glass: UIImage?
-
-    private var glassImage: UIImage? {
-        guard design.usesGlass else { return nil }
-        return glass ?? DesignStore.loadGlassBackground(for: design.id, family: family.glassFamily)
-    }
 
     static let cornerRadius: CGFloat = 24
 
@@ -310,38 +217,16 @@ struct DesignPreviewCard: View {
         }
     }
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-    }
-
     var body: some View {
         let size = Self.size(for: family)
         // 날짜를 고정하지 않으면 분마다 다시 그려 시계·D-day 가 실제처럼 바뀐다.
-        let content = TimelineView(.everyMinute) { context in
-            DesignContent(design: design, family: family, date: date ?? context.date,
-                          glass: appearance.isGlass,
-                          glassColor: appearance == .tinted ? tint.mix(with: .white, by: 0.55) : .white)
+        TimelineView(.everyMinute) { context in
+            DesignContent(design: design, family: family, date: date ?? context.date)
                 .padding(16)
         }
         .frame(width: size.width, height: size.height)
-
-        switch appearance {
-        case .standard:
-            content
-                .background(DesignBackground(design: design, photo: photo, glass: glassImage,
-                                             cornerRadius: Self.cornerRadius))
-                .clipShape(shape)
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
-        case .tinted, .clear:
-            content
-                .background {
-                    if design.template == .photo, let photo {
-                        GlassPhotoLayer(photo: photo, simulate: true)
-                            .clipShape(shape)
-                    }
-                }
-                .glassEffect(appearance == .tinted ? .regular.tint(tint.opacity(0.35)) : .clear,
-                             in: shape)
-        }
+        .background(DesignBackground(design: design, photo: photo))
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
     }
 }
