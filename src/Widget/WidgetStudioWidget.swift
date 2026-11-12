@@ -60,6 +60,8 @@ struct DesignProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectDesignIntent, in context: Context) async -> Timeline<DesignEntry> {
+        // 앱이 유리 자리 사각형을 실제 위젯 크기에 맞추도록 표시 크기를 남긴다.
+        DesignStore.recordWidgetSize(context.displaySize, family: context.family.glassFamily)
         let design = resolve(configuration)
         let now = Date.now
         let cal = Calendar.current
@@ -126,7 +128,10 @@ struct WidgetStudioEntryView: View {
                     .padding(16)
             }
             .containerBackground(for: .widget) {
-                DesignBackground(design: design, photo: photo)
+                DesignBackground(
+                    design: design, photo: photo,
+                    glass: design.usesGlass
+                        ? DesignStore.loadGlassBackground(for: design.id, family: family.glassFamily) : nil)
             }
             .widgetURL(URL(string: "widgetstudio://design/\(design.id.uuidString)"))
         } else {

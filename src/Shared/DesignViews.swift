@@ -77,10 +77,16 @@ enum HomeAppearance: String, CaseIterable, Identifiable {
 struct DesignBackground: View {
     let design: WidgetDesign
     var photo: UIImage?
+    /// 유리(투명) 배경 그림 — 앱이 배경화면에서 잘라 흐리게 만든 것.
+    var glass: UIImage?
+    /// nil 이면 위젯 모양(ContainerRelativeShape)을 따른다.
+    var cornerRadius: CGFloat?
 
     var body: some View {
         ZStack {
-            if design.template == .photo, let photo {
+            if design.usesGlass {
+                GlassBackdrop(image: glass, cornerRadius: cornerRadius)
+            } else if design.template == .photo, let photo {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFill()
@@ -91,6 +97,53 @@ struct DesignBackground: View {
             } else {
                 Color(hex: design.backgroundHex)
             }
+        }
+    }
+}
+
+/// 배경화면 조각 위에 Liquid Glass 의 테두리 빛과 위쪽 하이라이트를 얹는다.
+/// 위젯은 배경화면을 볼 수 없으므로, 그 자리의 배경화면을 미리 잘라 깔아 투명해 보이게 한다.
+struct GlassBackdrop: View {
+    let image: UIImage?
+    var cornerRadius: CGFloat?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+            } else {
+                // 아직 자리를 맞추지 않았을 때: 배경화면 없이 반투명 유리 느낌만.
+                LinearGradient(colors: [Color(white: 0.55), Color(white: 0.28)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            // Liquid Glass 클리어처럼 거의 투명하게: 위쪽 가장자리에만 옅은 빛.
+            LinearGradient(colors: [.white.opacity(0.10), .clear],
+                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.22))
+            edge
+        }
+    }
+
+    @ViewBuilder
+    private var edge: some View {
+        let stroke = LinearGradient(colors: [.white.opacity(0.6), .white.opacity(0.08), .white.opacity(0.28)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+        if let cornerRadius {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(stroke, lineWidth: 1.2)
+        } else {
+            ContainerRelativeShape()
+                .strokeBorder(stroke, lineWidth: 1.2)
+        }
+    }
+}
+
+extension WidgetFamily {
+    var glassFamily: GlassFamily {
+        switch self {
+        case .systemMedium: return .medium
+        case .systemLarge, .systemExtraLarge: return .large
+        default: return .small
         }
     }
 }
@@ -239,6 +292,13 @@ struct DesignPreviewCard: View {
     var appearance: HomeAppearance = .standard
     /// 틴트 모드에서 홈 화면이 입히는 색.
     var tint: Color = .blue
+    /// 유리(투명) 배경 그림. nil 이면 저장소에서 이 크기의 것을 읽는다.
+    var glass: UIImage?
+
+    private var glassImage: UIImage? {
+        guard design.usesGlass else { return nil }
+        return glass ?? DesignStore.loadGlassBackground(for: design.id, family: family.glassFamily)
+    }
 
     static let cornerRadius: CGFloat = 24
 
@@ -268,7 +328,8 @@ struct DesignPreviewCard: View {
         switch appearance {
         case .standard:
             content
-                .background(DesignBackground(design: design, photo: photo))
+                .background(DesignBackground(design: design, photo: photo, glass: glassImage,
+                                             cornerRadius: Self.cornerRadius))
                 .clipShape(shape)
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         case .tinted, .clear:

@@ -17,6 +17,7 @@ status: active
 - 위젯 — 작게·중간·크게. 길게 눌러 「위젯 편집」→「디자인」에서 앱의 디자인을 고른다(App Intent 구성). 고르지 않으면 첫 디자인을 보여 준다. 위젯을 누르면 그 디자인 편집기가 열린다.
 - 목록 — 길게 눌러 복제·삭제. 첫 실행 때 예시 디자인 3개를 넣는다.
 - Liquid Glass — 앱은 배경화면(노을·바다·꽃) 위에 유리 층을 쌓는다. 하단 + 유리 방울이 템플릿 방울로 녹아 펼쳐지고, 크기·표시 방식 선택기는 선택 표시가 유리로 옮겨 다니며, 색 견본은 색을 입힌 유리 방울이다.
+- 유리(투명) 배경 — 디자인마다 배경을 「유리(투명)」로 두면 홈 화면이 기본 모드여도 그 위젯만 클리어처럼 보인다. iOS 는 위젯 하나만 클리어로 바꾸는 API 가 없어서(`WidgetTexture.glass` 는 visionOS 전용), 빈 홈 화면 스크린샷에서 위젯 자리를 잘라 흐리게 깔고 유리 테두리 빛을 얹는다. 자리는 크기별로 스크린샷 위에서 끌어 맞춘다.
 - 홈 화면 틴트·클리어 — iOS 26 홈 화면을 틴트·클리어로 두면 위젯 배경이 유리로 바뀐다. 위젯은 시각·D-day 숫자·제목을 강조 그룹(`widgetAccentable`)으로, 나머지를 흐린 글자로 그리고, 사진은 채도를 뺀 강조색 층으로 남긴다. 앱의 「기본·틴트·클리어」 선택기로 같은 모습을 미리 본다.
 
 ## 구성
@@ -35,6 +36,10 @@ status: active
 - `bin/widget-studio run [기기 이름]` — 빌드 → 시뮬레이터 부팅·설치·실행(기본 `iPhone 17`).
 - `TEAM=<팀 ID> bin/widget-studio device [UDID]` — 케이블·Wi-Fi 로 페어링된 아이폰에 서명·설치·실행. 팀 ID 는 Xcode 설정 > Accounts 에서 보며 저장소에 넣지 않는다. 무료 Apple ID 의 Personal Team 으로 충분하고, 설치는 7일 동안 유효해서 그 뒤에는 다시 돌린다. 처음 설치한 기기에서 실행이 막히면 설정 > 일반 > VPN 및 기기 관리에서 개발자를 신뢰한다.
 - 저장소 공유 — 실기기는 키체인 공유 그룹(`<팀 접두어>io.github.s12171934.widgetstudio.shared`)을, 시뮬레이터는 App Group 을 쓴다. 무료 팀은 App Group 을 쓸 수 없어서다.
+
+## 검증
+
+- `tests/UITests` — XCUITest 로 SpringBoard 를 조작해 위젯을 홈 화면에 올리고, 유리 배경이 그 자리의 화면과 겹치는지 전후 스크린샷을 남긴다(`TEST_RUNNER_OUT_DIR=<폴더> xcodebuild test -scheme WidgetStudio -destination id=<시뮬레이터> -only-testing:WidgetStudioUITests`).
 
 ## 공개 면
 

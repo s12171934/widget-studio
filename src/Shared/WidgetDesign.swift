@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// 위젯 디자인 한 개. 앱이 만들고, 위젯 확장이 읽는다.
@@ -57,6 +58,18 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
     var photoDimming: Double = 0.25
     var updatedAt: Date = .now
 
+    // 유리(투명) 배경 — 홈 화면 배경화면 스크린샷에서 위젯 자리를 잘라 흐리게 깐다.
+    enum BackgroundStyle: String, Codable, CaseIterable, Identifiable {
+        case color, glass
+        var id: String { rawValue }
+        var label: String { self == .color ? "색" : "유리(투명)" }
+    }
+    var backgroundStyle: BackgroundStyle = .color
+    /// 크기("small"·"medium"·"large")별 위젯 자리. 스크린샷 기준 0~1 정규화 좌표.
+    var glassRects: [String: GlassRect] = [:]
+    var glassBlur: Double = 6
+    var glassDim: Double = 0.12
+
     /// 기준일(date)에서 목표일까지 남은 날짜 수. 지난 날짜면 음수.
     func daysRemaining(from date: Date) -> Int {
         let cal = Calendar.current
@@ -73,6 +86,39 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
 }
 
 extension WidgetDesign {
+    enum CodingKeys: String, CodingKey {
+        case id, name, template, title, subtitle, targetDate, backgroundHex, gradientHex, useGradient,
+             textHex, fontStyle, alignment, photoDimming, updatedAt,
+             backgroundStyle, glassRects, glassBlur, glassDim
+    }
+
+    /// 필드가 늘어도 예전에 저장한 디자인을 읽을 수 있도록, 없는 키는 기본값으로 채운다.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let base = WidgetDesign(name: "", template: .text, title: "")
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        template = try c.decodeIfPresent(Template.self, forKey: .template) ?? .text
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? base.subtitle
+        targetDate = try c.decodeIfPresent(Date.self, forKey: .targetDate) ?? base.targetDate
+        backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex) ?? base.backgroundHex
+        gradientHex = try c.decodeIfPresent(String.self, forKey: .gradientHex) ?? base.gradientHex
+        useGradient = try c.decodeIfPresent(Bool.self, forKey: .useGradient) ?? base.useGradient
+        textHex = try c.decodeIfPresent(String.self, forKey: .textHex) ?? base.textHex
+        fontStyle = try c.decodeIfPresent(FontStyle.self, forKey: .fontStyle) ?? base.fontStyle
+        alignment = try c.decodeIfPresent(Alignment.self, forKey: .alignment) ?? base.alignment
+        photoDimming = try c.decodeIfPresent(Double.self, forKey: .photoDimming) ?? base.photoDimming
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
+        backgroundStyle = try c.decodeIfPresent(BackgroundStyle.self, forKey: .backgroundStyle) ?? .color
+        glassRects = try c.decodeIfPresent([String: GlassRect].self, forKey: .glassRects) ?? [:]
+        glassBlur = try c.decodeIfPresent(Double.self, forKey: .glassBlur) ?? base.glassBlur
+        glassDim = try c.decodeIfPresent(Double.self, forKey: .glassDim) ?? base.glassDim
+    }
+
+    /// 유리 배경을 쓰는지(사진 템플릿은 사진이 배경이므로 제외).
+    var usesGlass: Bool { backgroundStyle == .glass && template != .photo }
+
     static let samples: [WidgetDesign] = [
         WidgetDesign(name: "저녁 하늘 시계", template: .clock, title: "오늘도 좋은 하루",
                      backgroundHex: "#0F172A", gradientHex: "#7C3AED", fontStyle: .rounded),
@@ -83,4 +129,12 @@ extension WidgetDesign {
                      subtitle: "— 나에게", backgroundHex: "#FEF3C7", gradientHex: "#FDE68A",
                      textHex: "#78350F", fontStyle: .serif, alignment: .center),
     ]
+}
+
+/// 스크린샷 기준 0~1 정규화 사각형.
+struct GlassRect: Codable, Hashable {
+    var x: Double, y: Double, w: Double, h: Double
+
+    init(_ r: CGRect) { x = r.minX; y = r.minY; w = r.width; h = r.height }
+    var cgRect: CGRect { CGRect(x: x, y: y, width: w, height: h) }
 }

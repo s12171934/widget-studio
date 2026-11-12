@@ -10,6 +10,12 @@ struct DesignEditorView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var photoChanged = false
     @State private var appearance: HomeAppearance = .standard
+    // 유리(투명) 배경
+    @State private var homeShot: UIImage? = DesignStore.loadWallpaper()
+    @State private var shotItem: PhotosPickerItem?
+    @State private var shotChanged = false
+    @State private var placing: GlassFamily?
+    @State private var liveGlass: UIImage?
     let wallpaper: Wallpaper.Style
     let onSave: (WidgetDesign) -> Void
 
@@ -66,6 +72,20 @@ struct DesignEditorView: View {
                         .buttonStyle(.glassProminent)
                 }
             }
+            .fullScreenCover(item: $placing) { f in
+                if let homeShot {
+                    GlassPlacementView(design: $design, family: f, wallpaper: homeShot)
+                }
+            }
+            .task(id: glassRenderKey) { renderLiveGlass() }
+            .onChange(of: shotItem) { _, item in
+                Task {
+                    guard let data = try? await item?.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data) else { return }
+                    homeShot = image
+                    shotChanged = true
+                }
+            }
             .onChange(of: photoItem) { _, item in
                 Task {
                     guard let data = try? await item?.loadTransferable(type: Data.self),
@@ -84,7 +104,7 @@ struct DesignEditorView: View {
         Section {
             VStack(spacing: 16) {
                 DesignPreviewCard(design: design, family: family, photo: photo,
-                                  appearance: appearance, tint: wallpaper.homeTint)
+                                  appearance: appearance, tint: wallpaper.homeTint, glass: liveGlass)
                     .frame(maxWidth: .infinity)
                     .frame(height: DesignPreviewCard.size(for: family).height)
                     .animation(.snappy, value: family)
@@ -97,8 +117,14 @@ struct DesignEditorView: View {
                     default: return "작게"
                     }
                 }
-                GlassSegmented(options: HomeAppearance.allCases, selection: $appearance,
-                               label: \.label, tint: .white.opacity(0.35))
+                VStack(spacing: 6) {
+                    GlassSegmented(options: HomeAppearance.allCases, selection: $appearance,
+                                   label: \.label, tint: .white.opacity(0.35))
+                    Text("홈 화면 전체 설정(편집 > 사용자화) 미리보기 · 이 위젯만 투명하게 하려면 배경을 「유리(투명)」로")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             .padding(.vertical, 8)
             .listRowBackground(Color.clear)
@@ -127,25 +153,75 @@ struct DesignEditorView: View {
     }
 
     private var backgroundSection: some View {
-        Section("배경") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                GlassEffectContainer(spacing: 12) {
-                    HStack(spacing: 12) {
-                        ForEach(palette, id: \.self) { hex in
-                            GlassSwatch(hex: hex, selected: design.backgroundHex == hex) {
-                                design.backgroundHex = hex
-                            }
+        Section {
+            Picker("배경", selection: $design.backgroundStyle) {
+                ForEach(WidgetDesign.BackgroundStyle.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            if design.backgroundStyle == .color {
+                colorRows
+            } else {
+                glassRows
+            }
+        } header: {
+            Text("배경")
+        } footer: {
+            if design.backgroundStyle == .glass {
+                Text("iOS 는 위젯 하나만 클리어로 바꿀 수 없어서, 빈 홈 화면 스크린샷에서 위젯 자리를 잘라 유리처럼 깝니다. 배경화면을 바꾸면 스크린샷을 다시 넣어 주세요.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var colorRows: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 12) {
+                    ForEach(palette, id: \.self) { hex in
+                        GlassSwatch(hex: hex, selected: design.backgroundHex == hex) {
+                            design.backgroundHex = hex
                         }
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 4)
                 }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
             }
-            .scrollClipDisabled()
-            ColorPicker("배경 색", selection: hexBinding(\.backgroundHex), supportsOpacity: false)
-            Toggle("그라데이션", isOn: $design.useGradient)
-            if design.useGradient {
-                ColorPicker("두 번째 색", selection: hexBinding(\.gradientHex), supportsOpacity: false)
+        }
+        .scrollClipDisabled()
+        ColorPicker("배경 색", selection: hexBinding(\.backgroundHex), supportsOpacity: false)
+        Toggle("그라데이션", isOn: $design.useGradient)
+        if design.useGradient {
+            ColorPicker("두 번째 색", selection: hexBinding(\.gradientHex), supportsOpacity: false)
+        }
+    }
+
+    @ViewBuilder
+    private var glassRows: some View {
+        PhotosPicker(selection: $shotItem, matching: .screenshots) {
+            Label(homeShot == nil ? "빈 홈 화면 스크린샷 고르기" : "스크린샷 바꾸기", systemImage: "iphone")
+        }
+        if homeShot == nil {
+            Text("홈 화면을 길게 눌러 편집 모드로 들어간 뒤, 아이콘이 없는 마지막 페이지로 넘겨 스크린샷을 찍으세요.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        if let homeShot {
+            if !GlassRenderer.matchesScreen(homeShot) {
+                Label("이 아이폰 화면 비율과 다른 스크린샷이에요. 자리가 어긋날 수 있어요.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+            ForEach(GlassFamily.allCases) { f in
+                Button { placing = f } label: {
+                    LabeledContent("\(f.label) 위젯 자리 맞추기") {
+                        if design.glassRects[f.rawValue] != nil {
+                            Label("맞춤", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        } else {
+                            Text("아직")
+                        }
+                    }
+                }
             }
         }
     }
@@ -171,10 +247,34 @@ struct DesignEditorView: View {
         )
     }
 
+    /// 미리보기 유리 그림을 다시 만들어야 하는 조건.
+    private var glassRenderKey: String {
+        let r = design.glassRects[family.glassFamily.rawValue]
+        return "\(design.usesGlass)|\(family.glassFamily.rawValue)|\(String(describing: r))|\(design.glassBlur)|\(design.glassDim)|\(homeShot.map { ObjectIdentifier($0).hashValue } ?? 0)"
+    }
+
+    private func renderLiveGlass() {
+        guard design.usesGlass, let homeShot,
+              let rect = design.glassRects[family.glassFamily.rawValue] else {
+            liveGlass = nil
+            return
+        }
+        liveGlass = GlassRenderer.render(wallpaper: homeShot, rect: rect,
+                                         blur: design.glassBlur, dim: design.glassDim, compensateFilm: false)
+    }
+
     private func save() {
         if photoChanged, let photo {
             DesignStore.savePhoto(photo, for: design.id)
         }
+        if shotChanged, let homeShot {
+            // 스크린샷은 모든 디자인이 함께 쓴다 — 바뀌면 다른 유리 디자인도 다시 자른다.
+            DesignStore.saveWallpaper(homeShot)
+            for other in DesignStore.load() where other.id != design.id && other.usesGlass {
+                GlassRenderer.renderAll(other, wallpaper: homeShot)
+            }
+        }
+        GlassRenderer.renderAll(design, wallpaper: homeShot)
         if design.name.trimmingCharacters(in: .whitespaces).isEmpty {
             design.name = design.template.label
         }

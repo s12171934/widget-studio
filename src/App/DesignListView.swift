@@ -66,6 +66,21 @@ struct DesignListView: View {
                     try? await Task.sleep(for: .milliseconds(600))
                     editing = library.designs.first { $0.id == id }
                 }
+                // 개발용(UI 테스트): `-glassTestShot <png 경로> -glassTestRect x,y,w,h` —
+                // 첫 디자인을 흐림·어둡게 0 인 유리 배경으로 바꿔, 위젯 배경이 원래 화면과 겹치는지 잰다.
+                if let path = UserDefaults.standard.string(forKey: "glassTestShot"),
+                   let shot = UIImage(contentsOfFile: path),
+                   let raw = UserDefaults.standard.string(forKey: "glassTestRect"),
+                   case let v = raw.split(separator: ",").compactMap({ Double($0) }), v.count == 4,
+                   var first = library.designs.first {
+                    DesignStore.saveWallpaper(shot)
+                    first.backgroundStyle = .glass
+                    first.glassBlur = 0
+                    first.glassDim = 0
+                    first.glassRects["small"] = GlassRect(CGRect(x: v[0], y: v[1], width: v[2], height: v[3]))
+                    GlassRenderer.renderAll(first)
+                    library.upsert(first)
+                }
                 // 개발용: `-appearance tinted|clear` 로 목록의 표시 방식을 고른다.
                 if let raw = UserDefaults.standard.string(forKey: "appearance"),
                    let a = HomeAppearance(rawValue: raw) {

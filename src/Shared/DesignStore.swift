@@ -79,6 +79,65 @@ enum DesignStore {
 
     static func deletePhoto(for id: UUID) {
         remove(photoKey(id))
+        for f in GlassFamily.allCases { remove(glassKey(id, f)) }
+    }
+
+    // MARK: - 유리(투명) 배경
+
+    private static let wallpaperKey = "wallpaper.v1"
+    private static func glassKey(_ id: UUID, _ f: GlassFamily) -> String { "glass.\(id.uuidString).\(f.rawValue)" }
+    private static func sizeKey(_ f: GlassFamily) -> String { "size.\(f.rawValue)" }
+
+    /// 빈 홈 화면 스크린샷. 앱만 쓰지만(잘라 내기) 위젯과 같은 저장소에 둔다.
+    static func saveWallpaper(_ image: UIImage) {
+        // 흐림 0 으로 써도 주변 배경화면과 이어지도록 거의 원본 해상도로 둔다(긴 변 2400px).
+        guard let data = image.resized(maxSide: 2400).jpegData(compressionQuality: 0.85) else { return }
+        write(data, wallpaperKey)
+    }
+
+    static func loadWallpaper() -> UIImage? {
+        read(wallpaperKey).flatMap(UIImage.init(data:))
+    }
+
+    /// 앱이 미리 잘라 흐리게 만든 위젯 배경. 위젯은 이 그림만 깐다.
+    static func saveGlassBackground(_ image: UIImage, for id: UUID, family: GlassFamily) {
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+        write(data, glassKey(id, family))
+    }
+
+    static func loadGlassBackground(for id: UUID, family: GlassFamily) -> UIImage? {
+        read(glassKey(id, family)).flatMap(UIImage.init(data:))
+    }
+
+    static func deleteGlassBackground(for id: UUID, family: GlassFamily) {
+        remove(glassKey(id, family))
+    }
+
+    /// 위젯 확장이 실제로 받은 표시 크기(pt)를 남겨, 앱이 자리 사각형 크기를 맞춘다.
+    static func recordWidgetSize(_ size: CGSize, family: GlassFamily) {
+        guard size.width > 0, size.height > 0 else { return }
+        if widgetSize(family: family) == size { return }
+        write(Data("\(size.width),\(size.height)".utf8), sizeKey(family))
+    }
+
+    static func widgetSize(family: GlassFamily) -> CGSize? {
+        guard let data = read(sizeKey(family)), let s = String(data: data, encoding: .utf8) else { return nil }
+        let parts = s.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { return nil }
+        return CGSize(width: parts[0], height: parts[1])
+    }
+}
+
+/// 유리 배경을 따로 맞추는 위젯 크기.
+enum GlassFamily: String, CaseIterable, Identifiable {
+    case small, medium, large
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .small: return "작게"
+        case .medium: return "중간"
+        case .large: return "크게"
+        }
     }
 }
 
