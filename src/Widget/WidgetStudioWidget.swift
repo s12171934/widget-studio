@@ -105,20 +105,35 @@ struct DesignProvider: AppIntentTimelineProvider {
 
 struct WidgetStudioEntryView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: DesignEntry
+
+    /// 홈 화면이 틴트·클리어(Liquid Glass)이면 accented 로 그려진다.
+    private var isGlass: Bool { renderingMode != .fullColor }
 
     var body: some View {
         if let design = entry.design {
             let photo = design.template == .photo ? DesignStore.loadPhoto(for: design.id) : nil
-            DesignContent(design: design, family: family, date: entry.date)
-                .containerBackground(for: .widget) {
-                    DesignBackground(design: design, photo: photo)
+            ZStack {
+                // 유리 모드에서는 배경이 걷히므로 사진을 내용 층에 올려 유리 위에 단색으로 남긴다.
+                if isGlass, let photo {
+                    GlassPhotoLayer(photo: photo)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .opacity(0.9)
                 }
-                .widgetURL(URL(string: "widgetstudio://design/\(design.id.uuidString)"))
+                DesignContent(design: design, family: family, date: entry.date, glass: isGlass)
+                    .padding(16)
+            }
+            .containerBackground(for: .widget) {
+                DesignBackground(design: design, photo: photo)
+            }
+            .widgetURL(URL(string: "widgetstudio://design/\(design.id.uuidString)"))
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "paintpalette")
                     .font(.title2)
+                    .widgetAccentable()
                 Text("앱에서 디자인을\n만들어 주세요")
                     .font(.caption)
                     .multilineTextAlignment(.center)
@@ -138,6 +153,8 @@ struct WidgetStudioWidget: Widget {
         .configurationDisplayName("위젯 스튜디오")
         .description("앱에서 만든 디자인을 홈 화면에 놓습니다. 길게 눌러 디자인을 바꿀 수 있어요.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        // 사진을 가장자리까지 채우기 위해 시스템 여백을 끄고 내용에 직접 16pt 를 준다.
+        .contentMarginsDisabled()
     }
 }
 

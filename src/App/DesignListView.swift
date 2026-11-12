@@ -4,68 +4,72 @@ struct DesignListView: View {
     @Environment(DesignLibrary.self) private var library
     @State private var editing: WidgetDesign?
     @State private var showGuide = false
+    @State private var appearance: HomeAppearance = .standard
+    @AppStorage("wallpaper") private var wallpaper: Wallpaper.Style = .dusk
 
-    private let columns = [GridItem(.adaptive(minimum: 158), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 158), spacing: 18)]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                if library.designs.isEmpty {
-                    ContentUnavailableView("디자인이 없습니다", systemImage: "paintpalette",
-                                           description: Text("오른쪽 위 + 로 첫 위젯을 만들어 보세요."))
-                        .padding(.top, 80)
-                } else {
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(library.designs) { design in
-                            Button { editing = design } label: {
-                                VStack(spacing: 8) {
-                                    DesignPreviewCard(design: design,
-                                                      photo: DesignStore.loadPhoto(for: design.id))
-                                    Text(design.name)
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("복제", systemImage: "plus.square.on.square") { library.duplicate(design) }
-                                Button("삭제", systemImage: "trash", role: .destructive) {
-                                    if let i = library.designs.firstIndex(of: design) {
-                                        library.delete(at: IndexSet(integer: i))
-                                    }
-                                }
+                VStack(spacing: 18) {
+                    GlassSegmented(options: HomeAppearance.allCases, selection: $appearance,
+                                   label: \.label)
+                        .padding(.horizontal)
+
+                    if library.designs.isEmpty {
+                        ContentUnavailableView("디자인이 없습니다", systemImage: "paintpalette",
+                                               description: Text("아래 + 로 첫 위젯을 만들어 보세요."))
+                            .padding(.top, 60)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 22) {
+                            ForEach(library.designs) { design in
+                                card(design)
                             }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding()
                 }
+                .padding(.top, 4)
+                .padding(.bottom, 120)
             }
-            .background(Color(.systemGroupedBackground))
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .background(Wallpaper(style: wallpaper))
             .navigationTitle("위젯 스튜디오")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("홈 화면에 놓는 법", systemImage: "questionmark.circle") { showGuide = true }
+                    Button("홈 화면에 놓는 법", systemImage: "questionmark") { showGuide = true }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        ForEach(WidgetDesign.Template.allCases) { t in
-                            Button(t.label, systemImage: t.symbol) { editing = .blank(t) }
+                        Picker("배경화면", selection: $wallpaper) {
+                            ForEach(Wallpaper.Style.allCases) { Text($0.label).tag($0) }
                         }
                     } label: {
-                        Label("새 디자인", systemImage: "plus")
+                        Label("배경화면", systemImage: "photo.artframe")
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                CreateBar { template in editing = .blank(template) }
+                    .padding(.bottom, 8)
+            }
             .sheet(item: $editing) { design in
-                DesignEditorView(design: design) { saved in library.upsert(saved) }
+                DesignEditorView(design: design, wallpaper: wallpaper) { saved in library.upsert(saved) }
             }
             .sheet(isPresented: $showGuide) { GuideView() }
+            .preferredColorScheme(wallpaper.colorScheme)
             .task {
                 // 개발용: `simctl launch … -openDesign <UUID>` 로 편집 화면을 바로 연다.
                 if let raw = UserDefaults.standard.string(forKey: "openDesign"),
                    let id = UUID(uuidString: raw) {
+                    try? await Task.sleep(for: .milliseconds(600))
                     editing = library.designs.first { $0.id == id }
+                }
+                // 개발용: `-appearance tinted|clear` 로 목록의 표시 방식을 고른다.
+                if let raw = UserDefaults.standard.string(forKey: "appearance"),
+                   let a = HomeAppearance(rawValue: raw) {
+                    appearance = a
                 }
             }
             .onOpenURL { url in
@@ -74,6 +78,80 @@ struct DesignListView: View {
                       let id = UUID(uuidString: url.lastPathComponent),
                       let design = library.designs.first(where: { $0.id == id }) else { return }
                 editing = design
+            }
+        }
+    }
+
+    private func card(_ design: WidgetDesign) -> some View {
+        Button { editing = design } label: {
+            VStack(spacing: 10) {
+                DesignPreviewCard(design: design,
+                                  photo: DesignStore.loadPhoto(for: design.id),
+                                  appearance: appearance,
+                                  tint: wallpaper.homeTint)
+                Text(design.name)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassEffect(.regular, in: .capsule)
+            }
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("복제", systemImage: "plus.square.on.square") { library.duplicate(design) }
+            Button("삭제", systemImage: "trash", role: .destructive) {
+                if let i = library.designs.firstIndex(of: design) {
+                    library.delete(at: IndexSet(integer: i))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 하단 만들기 막대
+
+/// + 유리 방울을 누르면 템플릿 방울들이 그 안에서 녹아 나오듯 펼쳐진다.
+struct CreateBar: View {
+    let onPick: (WidgetDesign.Template) -> Void
+    @State private var expanded = false
+    @Namespace private var ns
+
+    var body: some View {
+        GlassEffectContainer(spacing: 14) {
+            HStack(spacing: 10) {
+                if expanded {
+                    ForEach(WidgetDesign.Template.allCases) { t in
+                        Button {
+                            onPick(t)
+                            withAnimation(.bouncy) { expanded = false }
+                        } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: t.symbol).font(.title3)
+                                Text(t.label).font(.caption2.weight(.medium))
+                            }
+                            .frame(width: 62, height: 58)
+                            .contentShape(.rect(cornerRadius: 22))
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+                        .glassEffectID(t.rawValue, in: ns)
+                    }
+                }
+                Button {
+                    withAnimation(.bouncy(duration: 0.4)) { expanded.toggle() }
+                } label: {
+                    Image(systemName: expanded ? "xmark" : "plus")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 58, height: 58)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.tint(.accentColor).interactive(), in: .circle)
+                .glassEffectID("toggle", in: ns)
+                .accessibilityLabel(expanded ? "닫기" : "새 디자인")
             }
         }
     }
@@ -109,14 +187,20 @@ struct GuideView: View {
                     Label("놓은 위젯을 길게 눌러 「위젯 편집」을 고릅니다.", systemImage: "hand.tap")
                     Label("「디자인」에서 이 앱에서 만든 디자인을 고릅니다.", systemImage: "paintpalette")
                 }
-                Section {
-                    Text("앱에서 디자인을 저장하면 홈 화면 위젯도 곧바로 새로 그려집니다.")
-                        .foregroundStyle(.secondary)
+                Section("Liquid Glass 홈 화면") {
+                    Label("홈 화면 「편집」→「사용자화」에서 틴트·클리어를 고르면 위젯 배경이 유리로 바뀝니다.",
+                          systemImage: "drop")
+                    Label("이때 시각·D-day 숫자·제목은 강조 색으로, 나머지 글자는 흐리게 그려집니다. 목록 위 선택기로 미리 볼 수 있어요.",
+                          systemImage: "eye")
                 }
             }
             .navigationTitle("사용법")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("닫기") { dismiss() } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기", systemImage: "xmark") { dismiss() }
+                }
+            }
         }
     }
 }

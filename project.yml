@@ -2,7 +2,7 @@ name: WidgetStudio
 options:
   bundleIdPrefix: io.github.s12171934
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   createIntermediateGroups: true
   developmentLanguage: ko
 settings:

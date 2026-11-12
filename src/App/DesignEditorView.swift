@@ -9,10 +9,14 @@ struct DesignEditorView: View {
     @State private var photo: UIImage?
     @State private var photoItem: PhotosPickerItem?
     @State private var photoChanged = false
+    @State private var appearance: HomeAppearance = .standard
+    let wallpaper: Wallpaper.Style
     let onSave: (WidgetDesign) -> Void
 
-    init(design: WidgetDesign, onSave: @escaping (WidgetDesign) -> Void) {
+    init(design: WidgetDesign, wallpaper: Wallpaper.Style = .dusk,
+         onSave: @escaping (WidgetDesign) -> Void) {
         _design = State(initialValue: design)
+        self.wallpaper = wallpaper
         _photo = State(initialValue: DesignStore.loadPhoto(for: design.id))
         self.onSave = onSave
     }
@@ -49,12 +53,17 @@ struct DesignEditorView: View {
                     .pickerStyle(.segmented)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Wallpaper(style: wallpaper))
             .navigationTitle(design.name.isEmpty ? "디자인" : design.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소", systemImage: "xmark") { dismiss() }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("저장") { save() }.bold()
+                    Button("저장", systemImage: "checkmark") { save() }
+                        .buttonStyle(.glassProminent)
                 }
             }
             .onChange(of: photoItem) { _, item in
@@ -70,21 +79,30 @@ struct DesignEditorView: View {
 
     // MARK: 섹션
 
+    /// 배경화면 위에 실제 크기의 위젯을 띄우고, 크기와 홈 화면 표시 방식을 유리 선택기로 바꾼다.
     private var previewSection: some View {
         Section {
-            VStack(spacing: 14) {
-                DesignPreviewCard(design: design, family: family, photo: photo)
+            VStack(spacing: 16) {
+                DesignPreviewCard(design: design, family: family, photo: photo,
+                                  appearance: appearance, tint: wallpaper.homeTint)
                     .frame(maxWidth: .infinity)
+                    .frame(height: DesignPreviewCard.size(for: family).height)
                     .animation(.snappy, value: family)
-                Picker("크기", selection: $family) {
-                    Text("작게").tag(WidgetFamily.systemSmall)
-                    Text("중간").tag(WidgetFamily.systemMedium)
-                    Text("크게").tag(WidgetFamily.systemLarge)
+                    .animation(.smooth, value: appearance)
+                GlassSegmented(options: [WidgetFamily.systemSmall, .systemMedium, .systemLarge],
+                               selection: $family) { f in
+                    switch f {
+                    case .systemMedium: return "중간"
+                    case .systemLarge: return "크게"
+                    default: return "작게"
+                    }
                 }
-                .pickerStyle(.segmented)
+                GlassSegmented(options: HomeAppearance.allCases, selection: $appearance,
+                               label: \.label, tint: .white.opacity(0.35))
             }
             .padding(.vertical, 8)
             .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
         }
     }
 
@@ -111,23 +129,19 @@ struct DesignEditorView: View {
     private var backgroundSection: some View {
         Section("배경") {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(palette, id: \.self) { hex in
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 30, height: 30)
-                            .overlay(Circle().stroke(.secondary.opacity(0.4), lineWidth: 1))
-                            .overlay {
-                                if design.backgroundHex == hex {
-                                    Image(systemName: "checkmark").font(.caption.bold())
-                                        .foregroundStyle(hex == "#FFFFFF" || hex == "#FEF3C7" || hex == "#FACC15" ? .black : .white)
-                                }
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 12) {
+                        ForEach(palette, id: \.self) { hex in
+                            GlassSwatch(hex: hex, selected: design.backgroundHex == hex) {
+                                design.backgroundHex = hex
                             }
-                            .onTapGesture { design.backgroundHex = hex }
+                        }
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
-                .padding(.vertical, 4)
             }
+            .scrollClipDisabled()
             ColorPicker("배경 색", selection: hexBinding(\.backgroundHex), supportsOpacity: false)
             Toggle("그라데이션", isOn: $design.useGradient)
             if design.useGradient {

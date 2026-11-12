@@ -16,6 +16,8 @@ status: active
 - 미리보기 — 편집기에서 작게·중간·크게 크기로 실제 위젯과 같은 뷰를 그린다.
 - 위젯 — 작게·중간·크게. 길게 눌러 「위젯 편집」→「디자인」에서 앱의 디자인을 고른다(App Intent 구성). 고르지 않으면 첫 디자인을 보여 준다. 위젯을 누르면 그 디자인 편집기가 열린다.
 - 목록 — 길게 눌러 복제·삭제. 첫 실행 때 예시 디자인 3개를 넣는다.
+- Liquid Glass — 앱은 배경화면(노을·바다·꽃) 위에 유리 층을 쌓는다. 하단 + 유리 방울이 템플릿 방울로 녹아 펼쳐지고, 크기·표시 방식 선택기는 선택 표시가 유리로 옮겨 다니며, 색 견본은 색을 입힌 유리 방울이다.
+- 홈 화면 틴트·클리어 — iOS 26 홈 화면을 틴트·클리어로 두면 위젯 배경이 유리로 바뀐다. 위젯은 시각·D-day 숫자·제목을 강조 그룹(`widgetAccentable`)으로, 나머지를 흐린 글자로 그리고, 사진은 채도를 뺀 강조색 층으로 남긴다. 앱의 「기본·틴트·클리어」 선택기로 같은 모습을 미리 본다.
 
 ## 구성
 
@@ -27,7 +29,7 @@ status: active
 
 ## 설치·기동
 
-- 요구 사항 — Xcode(iOS 17 이상 SDK), `xcodegen`(`brew install xcodegen`).
+- 요구 사항 — Xcode 26 이상(iOS 26 SDK, Liquid Glass), 기기 iOS 26 이상, `xcodegen`(`brew install xcodegen`).
 - `bin/widget-studio gen` — Xcode 프로젝트 생성.
 - `bin/widget-studio build` — 시뮬레이터용 빌드(`.build/`).
 - `bin/widget-studio run [기기 이름]` — 빌드 → 시뮬레이터 부팅·설치·실행(기본 `iPhone 17`).
