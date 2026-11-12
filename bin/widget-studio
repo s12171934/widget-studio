@@ -3,6 +3,7 @@
 #   bin/widget-studio gen                 xcodegen 으로 WidgetStudio.xcodeproj 생성
 #   bin/widget-studio build               시뮬레이터용 빌드 (.build/ 에 산출)
 #   bin/widget-studio run [기기 이름]     빌드 → 시뮬레이터 부팅 → 설치 → 실행 (기본: iPhone 17)
+#   TEAM=<팀 ID> bin/widget-studio device [UDID]  연결된 아이폰에 서명·설치·실행
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -32,9 +33,26 @@ run() {
   xcrun simctl launch "$device" "$BUNDLE_ID"
 }
 
+# 실기기: 서명 팀은 저장소에 넣지 않고 환경변수로 받는다.
+device() {
+  local device="${1:-}"
+  : "${TEAM:?TEAM=<Apple 팀 ID> 를 지정하세요 (Xcode 설정 > Accounts 에서 확인)}"
+  [ -n "$device" ] || device="$(xcrun devicectl list devices 2>/dev/null | awk '/physical/ && /available|connected/ {for(i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) print $i}' | head -1)"
+  [ -n "$device" ] || { echo "연결된 아이폰을 찾지 못했습니다." >&2; exit 1; }
+  gen
+  xcodebuild -project "$ROOT/WidgetStudio.xcodeproj" -scheme WidgetStudio \
+    -destination "id=$device" -configuration Debug -derivedDataPath "$DERIVED" \
+    -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build -quiet
+  local app="$DERIVED/Build/Products/Debug-iphoneos/WidgetStudio.app"
+  xcrun devicectl device install app --device "$device" "$app"
+  xcrun devicectl device process launch --device "$device" "$BUNDLE_ID" || \
+    echo "실행 실패 — 아이폰 설정 > 일반 > VPN 및 기기 관리에서 개발자 앱을 신뢰한 뒤 다시 여세요."
+}
+
 case "${1:-}" in
   gen) gen ;;
   build) build ;;
   run) shift; run "$@" ;;
-  *) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  device) shift; device "$@" ;;
+  *) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

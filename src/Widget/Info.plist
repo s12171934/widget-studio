@@ -25,5 +25,7 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>WSKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared</string>
 </dict>
 </plist>

@@ -28,9 +28,11 @@ status: active
 ## 설치·기동
 
 - 요구 사항 — Xcode(iOS 17 이상 SDK), `xcodegen`(`brew install xcodegen`).
-- `bin/widget-studio gen` — Xcode 프로젝트 생성. 실기기 설치는 이 프로젝트를 Xcode 로 열어 서명 팀을 고르고 실행한다(앱과 확장 모두 App Group `group.io.github.s12171934.widgetstudio` 사용 — 팀에 맞게 번들 ID·그룹을 바꿀 수 있다).
+- `bin/widget-studio gen` — Xcode 프로젝트 생성.
 - `bin/widget-studio build` — 시뮬레이터용 빌드(`.build/`).
 - `bin/widget-studio run [기기 이름]` — 빌드 → 시뮬레이터 부팅·설치·실행(기본 `iPhone 17`).
+- `TEAM=<팀 ID> bin/widget-studio device [UDID]` — 케이블·Wi-Fi 로 페어링된 아이폰에 서명·설치·실행. 팀 ID 는 Xcode 설정 > Accounts 에서 보며 저장소에 넣지 않는다. 무료 Apple ID 의 Personal Team 으로 충분하고, 설치는 7일 동안 유효해서 그 뒤에는 다시 돌린다. 처음 설치한 기기에서 실행이 막히면 설정 > 일반 > VPN 및 기기 관리에서 개발자를 신뢰한다.
+- 저장소 공유 — 실기기는 키체인 공유 그룹(`<팀 접두어>io.github.s12171934.widgetstudio.shared`)을, 시뮬레이터는 App Group 을 쓴다. 무료 팀은 App Group 을 쓸 수 없어서다.
 
 ## 공개 면
 

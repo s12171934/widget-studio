@@ -1,26 +1,45 @@
 import Foundation
+import Security
 import UIKit
 
-/// App Group 컨테이너에 디자인 목록(JSON)과 배경 사진을 저장한다.
-/// 앱과 위젯 확장이 같은 저장소를 본다.
+/// 앱과 위젯 확장이 함께 보는 저장소. 디자인 목록(JSON)과 배경 사진을 담는다.
+///
+/// 1순위는 키체인 공유 그룹이다 — 무료 Apple ID(Personal Team)는 App Group 을 쓸 수 없지만
+/// 키체인 공유는 쓸 수 있어서, 실기기에서는 여기에 저장한다.
+/// 키체인을 쓸 수 없는 환경(팀 없이 서명한 시뮬레이터 빌드)에서는 App Group 으로 내려간다.
 enum DesignStore {
     static let appGroupID = "group.io.github.s12171934.widgetstudio"
     private static let designsKey = "designs.v1"
     private static let seededKey = "seeded.v1"
 
-    static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroupID) ?? .standard
+    // MARK: - 원시 저장 (키체인 → App Group)
+
+    private static func read(_ key: String) -> Data? {
+        if let data = SharedKeychain.read(key) { return data }
+        return fallbackDefaults?.data(forKey: key)
     }
 
-    static var containerURL: URL {
-        if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
-            return url
-        }
-        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    @discardableResult
+    private static func write(_ data: Data, _ key: String) -> Bool {
+        if SharedKeychain.write(data, key) { return true }
+        guard let d = fallbackDefaults else { return false }
+        d.set(data, forKey: key)
+        return true
     }
+
+    private static func remove(_ key: String) {
+        SharedKeychain.delete(key)
+        fallbackDefaults?.removeObject(forKey: key)
+    }
+
+    private static var fallbackDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupID)
+    }
+
+    // MARK: - 디자인
 
     static func load() -> [WidgetDesign] {
-        guard let data = defaults.data(forKey: designsKey),
+        guard let data = read(designsKey),
               let designs = try? JSONDecoder().decode([WidgetDesign].self, from: data) else {
             return []
         }
@@ -29,7 +48,7 @@ enum DesignStore {
 
     static func save(_ designs: [WidgetDesign]) {
         guard let data = try? JSONEncoder().encode(designs) else { return }
-        defaults.set(data, forKey: designsKey)
+        write(data, designsKey)
     }
 
     static func design(id: UUID) -> WidgetDesign? {
@@ -38,36 +57,78 @@ enum DesignStore {
 
     /// 처음 실행할 때 예시 디자인을 넣는다. 이미 넣었으면 아무것도 하지 않는다.
     static func seedIfNeeded() {
-        guard !defaults.bool(forKey: seededKey) else { return }
+        guard read(seededKey) == nil else { return }
         if load().isEmpty { save(WidgetDesign.samples) }
-        defaults.set(true, forKey: seededKey)
+        write(Data([1]), seededKey)
     }
 
     // MARK: - 사진
 
-    private static var photosDir: URL {
-        let dir = containerURL.appendingPathComponent("Photos", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
+    private static func photoKey(_ id: UUID) -> String { "photo.\(id.uuidString)" }
 
-    static func photoURL(for id: UUID) -> URL {
-        photosDir.appendingPathComponent("\(id.uuidString).jpg")
-    }
-
-    /// 위젯 메모리 한도를 넘지 않도록 긴 변 1000px 로 줄여 저장한다.
+    /// 위젯 메모리 한도와 키체인 항목 크기를 고려해 긴 변 900px·JPEG 0.75 로 줄여 저장한다.
     static func savePhoto(_ image: UIImage, for id: UUID) {
-        let resized = image.resized(maxSide: 1000)
-        guard let data = resized.jpegData(compressionQuality: 0.85) else { return }
-        try? data.write(to: photoURL(for: id), options: .atomic)
+        let resized = image.resized(maxSide: 900)
+        guard let data = resized.jpegData(compressionQuality: 0.75) else { return }
+        write(data, photoKey(id))
     }
 
     static func loadPhoto(for id: UUID) -> UIImage? {
-        UIImage(contentsOfFile: photoURL(for: id).path)
+        read(photoKey(id)).flatMap(UIImage.init(data:))
     }
 
     static func deletePhoto(for id: UUID) {
-        try? FileManager.default.removeItem(at: photoURL(for: id))
+        remove(photoKey(id))
+    }
+}
+
+/// 키체인 공유 그룹(`keychain-access-groups`)에 데이터를 둔다.
+/// 그룹 이름은 빌드 때 Info.plist 의 `WSKeychainGroup` 에 팀 접두어까지 채워진다.
+enum SharedKeychain {
+    private static let service = "io.github.s12171934.widgetstudio"
+
+    static var accessGroup: String? {
+        guard let g = Bundle.main.object(forInfoDictionaryKey: "WSKeychainGroup") as? String,
+              !g.isEmpty, !g.hasPrefix(".") else { return nil }
+        return g
+    }
+
+    private static func baseQuery(_ key: String) -> [String: Any]? {
+        guard let group = accessGroup else { return nil }
+        return [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecAttrAccessGroup as String: group,
+        ]
+    }
+
+    static func read(_ key: String) -> Data? {
+        guard var q = baseQuery(key) else { return nil }
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    static func write(_ data: Data, _ key: String) -> Bool {
+        guard let q = baseQuery(key) else { return false }
+        let attrs: [String: Any] = [
+            kSecValueData as String: data,
+            // 위젯은 잠금 상태에서도 그려지므로, 부팅 뒤 한 번 잠금 해제 이후면 읽을 수 있게 한다.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        let status = SecItemUpdate(q as CFDictionary, attrs as CFDictionary)
+        if status == errSecSuccess { return true }
+        guard status == errSecItemNotFound else { return false }
+        let add = q.merging(attrs) { $1 }
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func delete(_ key: String) {
+        guard let q = baseQuery(key) else { return }
+        SecItemDelete(q as CFDictionary)
     }
 }
 
