@@ -1,7 +1,6 @@
 import PhotosUI
 import SwiftUI
 import WidgetKit
-import UniformTypeIdentifiers
 
 struct DesignEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,6 +17,8 @@ struct DesignEditorView: View {
     @State private var showGIFPlayer = false
     @State private var gifError: String?
     @State private var gifRequest = UUID()
+    @State private var showGIFSources = false
+    @State private var gifSourceTab: GIFSourceSheet.Tab = .presets
     let wallpaper: Wallpaper.Style
     let onSave: (WidgetDesign) -> Void
 
@@ -87,7 +88,7 @@ struct DesignEditorView: View {
                 }
             }
             .task {
-                guard design.template == .gif else { return }
+                guard design.template == .gif, DesignStore.design(id: design.id) != nil else { return }
                 let id = design.id
                 await loadGIF(changed: false) {
                     try await Task.detached(priority: .userInitiated) {
@@ -103,20 +104,34 @@ struct DesignEditorView: View {
                     return try await Task.detached(priority: .userInitiated) { try GIFAsset(data: data) }.value
                 }
             }
-            .fileImporter(isPresented: $showGIFFilePicker, allowedContentTypes: [.gif]) { result in
-                switch result {
-                case .success(let url):
+            .sheet(isPresented: $showGIFFilePicker) {
+                GIFFilePicker { url in
+                    showGIFFilePicker = false
                     Task {
                         await loadGIF(changed: true) {
                             try await Task.detached(priority: .userInitiated) { try GIFAsset.readFile(url) }.value
                         }
                     }
-                case .failure(let error):
-                    if (error as NSError).code != NSUserCancelledError { gifError = error.localizedDescription }
-                }
+                } onCancel: { showGIFFilePicker = false }
             }
             .sheet(isPresented: $showGIFPlayer) {
                 GIFPlayerScreen(design: design, preview: gif)
+            }
+            .sheet(isPresented: $showGIFSources) {
+                GIFSourceSheet(initialTab: gifSourceTab) { preset, asset in
+                    gifRequest = UUID()
+                    importingGIF = false
+                    gif = asset
+                    photo = asset.poster
+                    gifChanged = true
+                    photoChanged = true
+                    if let preset {
+                        design.photoDimming = 0
+                        if design.name == "새 GIF" || design.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            design.name = preset.title
+                        }
+                    }
+                }
             }
             .alert("GIF 작업을 완료할 수 없습니다", isPresented: Binding(
                 get: { gifError != nil }, set: { if !$0 { gifError = nil } }
@@ -214,6 +229,16 @@ struct DesignEditorView: View {
 
     private var gifSection: some View {
         Section {
+            Button("프리셋에서 고르기", systemImage: "square.grid.2x2") {
+                gifSourceTab = .presets
+                showGIFSources = true
+            }
+            .accessibilityIdentifier("pick-gif-preset")
+            Button("GIF 검색·다운로드", systemImage: "magnifyingglass") {
+                gifSourceTab = .search
+                showGIFSources = true
+            }
+            .accessibilityIdentifier("find-gif-online")
             PhotosPicker(selection: $gifItem, matching: .images, preferredItemEncoding: .current) {
                 Label("사진 보관함에서 GIF 고르기", systemImage: "photo.on.rectangle")
             }

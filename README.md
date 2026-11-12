@@ -12,7 +12,8 @@ status: active
 ## 기능
 
 - 템플릿 — 문구(제목·보조 문구), 시계(요일·날짜·시각, 분마다 갱신), D-day(목표일까지 `D-n`·`D-DAY`·`D+n`, 자정마다 갱신), 사진(배경 사진 + 어둡게 정도 + 캡션).
-- GIF — 사진 보관함·파일에서 GIF를 가져온다(12MB·300프레임 이하). 홈 화면에는 첫 장면과 「GIF 재생」 표시를 놓고, 위젯을 누르면 앱에서 반복 재생한다. 앱에서 일시 정지·재생할 수 있고, 디자인을 길게 눌러 재생·복제·삭제할 수 있다. 가져온 GIF는 저장을 눌렀을 때 보관한다.
+- GIF — 내장 프리셋 8종에서 고르거나 사진 보관함·파일에서 가져온다(12MB·300프레임 이하). 홈 화면에는 첫 장면과 「GIF 재생」 표시를 놓고, 위젯을 누르면 앱에서 반복 재생한다. 앱에서 일시 정지·재생할 수 있고, 디자인을 길게 눌러 재생·복제·삭제할 수 있다. 가져온 GIF는 저장을 눌렀을 때 보관한다.
+- GIF 찾기 — 편집기의 「GIF 검색·다운로드」에서 검색어를 넣어 Pixabay·GIPHY·Tenor 검색 페이지를 연다. 사이트에서 파일을 저장한 뒤 「다운로드한 GIF 불러오기」로 가져온다. 사진 보관함에 저장한 파일은 사진 보관함 버튼으로 선택한다.
 - 꾸미기 — 배경 단색·그라데이션(팔레트 + 색 고르기), 글자 색, 글꼴(기본·둥근·명조·고정폭), 정렬(왼쪽·가운데).
 - 미리보기 — 편집기에서 작게·중간·크게 크기로 실제 위젯과 같은 뷰를 그린다.
 - 위젯 — 작게·중간·크게. 길게 눌러 「위젯 편집」→「디자인」에서 앱의 디자인을 고른다(App Intent 구성). 고르지 않으면 첫 디자인을 보여 준다. 위젯을 누르면 GIF는 재생 화면을, 나머지는 디자인 편집기를 연다.
@@ -40,6 +41,8 @@ status: active
 
 ## GIF 표시 범위
 
+- 프리셋 — 「프리셋에서 고르기」에서 미리 보고 선택한다. 앱이 직접 그리는 8가지 장면을 네트워크 없이 GIF로 생성하며, 처음 만드는 디자인의 이름도 선택한 프리셋 이름으로 채운다.
+- 검색 링크 — [Pixabay GIF](https://pixabay.com/gifs/), [GIPHY](https://giphy.com/), [Tenor](https://tenor.com/)를 브라우저로 연다. 검색어를 URL에 반영하며 외부 GIF를 앱에 내장하거나 검색 API·계정 키를 사용하지 않는다.
 - 홈 화면 — GIF 자동 반복 재생은 지원하지 않는다. WidgetKit은 GIF/APNG 재생을 지원하지 않고, 데이터 변경 애니메이션도 최대 2초다 ([Apple 엔지니어 답변](https://developer.apple.com/forums/thread/720640?answerId=744938022), [WidgetKit 애니메이션 문서](https://developer.apple.com/documentation/widgetkit/animating-data-updates-in-widgets-and-live-activities)).
 - 앱 — 원래 프레임 간격으로 반복 재생한다. 화면을 닫거나 앱이 비활성 상태가 되면 재생을 멈춘다. 재생 프레임은 긴 변 600px 이하로 추출하고 캐시 한도를 24MiB로 둔다.
 - 홈 화면 모드 — GIF 대표 장면도 사진과 같이 iOS 모드를 따른다. 클리어·틴트에서는 시스템 유리 위에 채도를 뺀 강조색 이미지로 표시한다.
@@ -48,7 +51,7 @@ status: active
 
 - 프로젝트 생성 — `bin/widget-studio gen`.
 - 단위 테스트 — `xcodebuild test -project WidgetStudio.xcodeproj -scheme WidgetStudio -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:WidgetStudioTests`.
-- 화면 테스트 — iPhone 17 시뮬레이터 사진 보관함에 GIF를 최신 항목으로 넣은 뒤 `-only-testing:WidgetStudioUITests -parallel-testing-enabled NO`로 실행한다. 사진 가져오기·장면 변화·일시 정지·저장·홈 화면 위젯 디자인 선택·탭 후 재생을 확인한다.
+- 화면 테스트 — iPhone 17 시뮬레이터 사진 보관함에 GIF를 최신 항목으로 넣은 뒤 `-only-testing:WidgetStudioUITests -parallel-testing-enabled NO`로 실행한다. 사진 가져오기·장면 변화·일시 정지·저장·홈 화면 위젯 디자인 선택·탭 후 재생과 프리셋 선택·검색 화면·다운로드 파일 선택기 연결을 확인한다.
 
 ## 공개 면
 

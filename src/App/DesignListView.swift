@@ -207,6 +207,7 @@ struct GuideView: View {
                     Label("「디자인」에서 이 앱에서 만든 디자인을 고릅니다.", systemImage: "paintpalette")
                 }
                 Section("GIF 위젯") {
+                    Label("GIF 편집기의 「프리셋에서 고르기」에서 8가지 장면을 바로 사용할 수 있습니다. 「GIF 검색·다운로드」에서는 검색 사이트를 열고 저장한 파일을 가져올 수 있습니다.", systemImage: "square.grid.2x2")
                     Label("+ 에서 GIF를 골라 사진 보관함이나 파일에서 가져옵니다. 12MB·300프레임 이하의 GIF를 사용할 수 있습니다.", systemImage: "photo.on.rectangle")
                     Label("홈 화면에는 첫 장면이 표시되고, 위젯을 누르면 앱에서 반복 재생합니다. 앱의 디자인을 길게 눌러서도 재생할 수 있습니다.", systemImage: "play.rectangle")
                 }

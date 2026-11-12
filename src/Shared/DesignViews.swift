@@ -184,6 +184,7 @@ struct DesignContent: View {
             if design.template == .gif {
                 Label("GIF 재생", systemImage: "play.fill")
                     .font(design.font(size: 11 * scale))
+                    .shadow(radius: glass ? 0 : 3)
                     .widgetAccentable()
                     .padding(.bottom, 4)
             }

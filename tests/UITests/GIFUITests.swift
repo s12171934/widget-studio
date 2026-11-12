@@ -3,6 +3,70 @@ import XCTest
 final class GIFUITests: XCTestCase {
     private let app = XCUIApplication()
 
+    func testPresetSelectionPlaybackSearchAndFileImportHandoff() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.press(.home)
+        app.launch()
+        app.buttons["새 디자인"].tap()
+        app.buttons["create-gif"].tap()
+        XCTAssertFalse(app.alerts.firstMatch.exists, "새 GIF에는 파일 읽기 오류가 없어야 한다")
+        let presets = app.buttons["pick-gif-preset"]
+        reveal(presets)
+        presets.tap()
+        XCTAssertTrue(app.navigationBars["GIF 라이브러리"].waitForExistence(timeout: 5))
+        saveScreenshot("gif-presets.png")
+        app.buttons["preset-stars"].tap()
+        XCTAssertTrue(app.navigationBars["별빛 여행"].waitForExistence(timeout: 15))
+        let preview = app.buttons["preview-gif"]
+        reveal(preview)
+        preview.tap()
+        XCTAssertTrue(app.buttons["일시 정지"].waitForExistence(timeout: 5))
+        saveScreenshot("gif-preset-playing.png")
+        app.buttons["닫기"].tap()
+
+        let search = app.buttons["find-gif-online"]
+        reveal(search)
+        search.tap()
+        let query = app.textFields["gif-search-query"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5))
+        query.tap()
+        query.typeText("cat dog\n")
+        let keyboardDismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.keyboards.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [keyboardDismissed], timeout: 5), .completed)
+        for provider in ["pixabay", "giphy", "tenor"] {
+            XCTAssertTrue(app.descendants(matching: .any)["gif-search-\(provider)"].firstMatch.exists)
+        }
+        saveScreenshot("gif-search-links.png")
+        let download = app.buttons["import-downloaded-gif"]
+        reveal(download)
+        download.tap()
+        let files = app.otherElements["Browse View (Picker)"]
+        let filePickerPresented = files.waitForExistence(timeout: 10)
+        saveScreenshot("gif-download-import.png")
+        XCTAssertTrue(filePickerPresented, app.debugDescription)
+        let fileNavigation = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        let cancel = fileNavigation.buttons.matching(NSPredicate(format: "label == '취소' OR label == 'Cancel'")).firstMatch
+        XCTAssertTrue(cancel.exists)
+        // 원격 문서 UI는 isHittable이 false여도 표시된다. 확인된 버튼 프레임으로 누른다.
+        cancel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars["GIF 라이브러리"].waitForExistence(timeout: 5))
+        app.buttons["닫기"].tap()
+        XCTAssertTrue(app.buttons["save-design"].isEnabled)
+        app.buttons["save-design"].tap()
+        XCTAssertTrue(app.staticTexts["별빛 여행"].firstMatch.waitForExistence(timeout: 5))
+    }
+
+    private func reveal(_ element: XCUIElement) {
+        for _ in 0..<4 {
+            if element.exists && element.isHittable { return }
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        for _ in 0..<5 {
+            if element.exists && element.isHittable { return }
+            app.collectionViews.firstMatch.swipeDown()
+        }
+    }
+
     func testGIFImportPlaybackAndSave() throws {
         continueAfterFailure = false
         XCUIDevice.shared.press(.home)
@@ -98,7 +162,9 @@ final class GIFUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         if let directory = ProcessInfo.processInfo.environment["OUT_DIR"] {
-            try? shot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
+            let root = URL(fileURLWithPath: directory)
+            try? shot.pngRepresentation.write(to: root.appendingPathComponent(name))
+            try? app.debugDescription.write(to: root.appendingPathComponent(name + ".tree.txt"), atomically: true, encoding: .utf8)
         }
     }
 }

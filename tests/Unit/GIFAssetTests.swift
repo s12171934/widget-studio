@@ -115,4 +115,36 @@ final class GIFAssetTests: XCTestCase {
         XCTAssertEqual(gif.widgetURL?.lastPathComponent, gif.id.uuidString)
         XCTAssertEqual(photo.widgetURL?.host, "design")
     }
+
+    func testAllBuiltInPresetsProduceValidMovingGIFsWithinImportBudgets() throws {
+        for preset in GIFPreset.allCases {
+            let asset = try preset.makeAsset()
+            XCTAssertEqual(asset.delays.count, 36, preset.title)
+            XCTAssertEqual(asset.duration, 2.88, accuracy: 0.01, preset.title)
+            XCTAssertLessThan(asset.data.count, GIFAsset.maximumBytes, preset.title)
+            XCTAssertNotEqual(asset.frame(at: 0)?.pngData(), asset.frame(at: 7)?.pngData(), preset.title)
+            if let directory = ProcessInfo.processInfo.environment["OUT_DIR"] {
+                let root = URL(fileURLWithPath: directory)
+                try asset.poster.pngData()?.write(to: root.appendingPathComponent("preset-\(preset.id).png"))
+                try asset.data.write(to: root.appendingPathComponent("preset-\(preset.id).gif"))
+            }
+        }
+    }
+
+    func testSearchLinksEncodeKeywordsAndKeepDestinationHost() throws {
+        XCTAssertEqual(GIFSearchProvider.pixabay.searchURL(query: "cat dog").absoluteString,
+                       "https://pixabay.com/gifs/search/cat%20dog/")
+        XCTAssertEqual(GIFSearchProvider.giphy.searchURL(query: "cat dog").absoluteString,
+                       "https://giphy.com/explore/cat-dog")
+        XCTAssertEqual(GIFSearchProvider.tenor.searchURL(query: "cat dog").absoluteString,
+                       "https://tenor.com/search/cat-dog-gifs")
+        for provider in GIFSearchProvider.allCases {
+            let url = provider.searchURL(query: "  고양이/하트?100%#  ")
+            XCTAssertEqual(url.scheme, "https")
+            XCTAssertTrue(url.absoluteString.contains("%2F"))
+            XCTAssertNil(url.query)
+            XCTAssertNil(url.fragment)
+            XCTAssertEqual(provider.searchURL(query: " \n ").host, url.host)
+        }
+    }
 }
