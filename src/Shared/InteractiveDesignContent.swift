@@ -12,6 +12,7 @@ struct InteractiveDesignContent: View {
 
     private var compact: Bool { family == .systemSmall || family == .systemMedium }
     private var extraLarge: Bool { family == .systemExtraLarge }
+    private var pomodoroControlsHeight: CGFloat { compact ? 45 : 56 }
 
     var body: some View {
         Group {
@@ -180,7 +181,6 @@ struct InteractiveDesignContent: View {
     private var pomodoro: some View {
         let snapshot = activity.pomodoroSnapshot(for: design, at: date)
         return VStack(alignment: .leading, spacing: compact ? 3 : 14) {
-            heading("포모도로")
             if extraLarge {
                 HStack(alignment: .top, spacing: 32) {
                     pomodoroClock(snapshot)
@@ -208,16 +208,15 @@ struct InteractiveDesignContent: View {
             if family == .systemSmall {
                 VStack(spacing: 3) {
                     PomodoroDial(snapshot: snapshot, date: date,
-                                 side: max(1, min(size.width, size.height - 31)), systemTimer: widgetControls)
+                                 side: max(1, min(size.width, size.height - pomodoroControlsHeight - 3)), systemTimer: widgetControls)
                     pomodoroButtons(snapshot)
-                        .frame(height: 28)
+                        .frame(height: pomodoroControlsHeight)
                 }
             } else if family == .systemMedium || extraLarge {
                 HStack(spacing: extraLarge ? 28 : 12) {
                     PomodoroDial(snapshot: snapshot, date: date,
                                  side: min(size.height, size.width * 0.48), systemTimer: widgetControls)
                     VStack(alignment: .leading, spacing: extraLarge ? 18 : 6) {
-                        heading("포모도로")
                         Text(snapshot.phase.label).font(extraLarge ? .title2.bold() : .caption.bold())
                         Text("완료 \(snapshot.completedFocus)회").font(.caption).opacity(0.75)
                         pomodoroButtons(snapshot)
@@ -227,10 +226,9 @@ struct InteractiveDesignContent: View {
                 }
             } else {
                 VStack(spacing: 8) {
-                    heading("포모도로").frame(height: 24)
                     PomodoroDial(snapshot: snapshot, date: date,
-                                 side: max(1, min(size.width, size.height - 98)), systemTimer: widgetControls)
-                    pomodoroButtons(snapshot).frame(height: 34)
+                                 side: max(1, min(size.width, size.height - pomodoroControlsHeight - 32)), systemTimer: widgetControls)
+                    pomodoroButtons(snapshot).frame(height: pomodoroControlsHeight)
                     Text("완료 \(snapshot.completedFocus)회 · \(snapshot.settings.rounds)회마다 긴 휴식")
                         .font(.caption).opacity(0.75).frame(height: 16)
                 }
@@ -240,10 +238,26 @@ struct InteractiveDesignContent: View {
     }
 
     private func pomodoroButtons(_ snapshot: PomodoroSnapshot) -> some View {
-        HStack(spacing: 6) {
-            actionButton(snapshot.isRunning ? "정지" : (activity.pomodoro == nil ? "시작" : "재개"),
-                         symbol: snapshot.isRunning ? "pause.fill" : "play.fill", action: .toggleTimer)
-            actionButton("", symbol: "arrow.counterclockwise", action: .resetTimer, accessibility: "포모도로 초기화")
+        VStack(spacing: compact ? 3 : 6) {
+            Text("\(activity.pomodoroSettings(for: design).focusMinutes)분")
+                .font(.system(size: compact ? 11 : 13, weight: .semibold))
+                .monospacedDigit()
+                .frame(height: compact ? 14 : 16)
+                .accessibilityIdentifier("pomodoro-selected-minutes")
+            HStack(spacing: 6) {
+                actionButton(family == .systemSmall ? "" : "5분", symbol: "minus", action: .decreaseTimerMinutes,
+                             accessibility: "집중 시간 5분 줄이기")
+                    .disabled(snapshot.isRunning || activity.pomodoroSettings(for: design).focusMinutes <= 5)
+                    .opacity(snapshot.isRunning ? 0.4 : 1)
+                actionButton(family == .systemSmall ? "" : (snapshot.isRunning ? "정지" : (activity.pomodoro == nil ? "시작" : "재개")),
+                             symbol: snapshot.isRunning ? "pause.fill" : "play.fill", action: .toggleTimer,
+                             accessibility: snapshot.isRunning ? "정지" : (activity.pomodoro == nil ? "시작" : "재개"))
+                actionButton(family == .systemSmall ? "" : "5분", symbol: "plus", action: .increaseTimerMinutes,
+                             accessibility: "집중 시간 5분 늘리기")
+                    .disabled(snapshot.isRunning || activity.pomodoroSettings(for: design).focusMinutes >= 60)
+                    .opacity(snapshot.isRunning ? 0.4 : 1)
+                actionButton("", symbol: "arrow.counterclockwise", action: .resetTimer, accessibility: "포모도로 초기화")
+            }
         }
     }
 
@@ -272,11 +286,7 @@ struct InteractiveDesignContent: View {
             .widgetAccentable()
             .invalidatableContent()
             .accessibilityIdentifier("pomodoro-remaining")
-            HStack(spacing: 6) {
-                actionButton(snapshot.isRunning ? "정지" : (activity.pomodoro == nil ? "시작" : "재개"),
-                             symbol: snapshot.isRunning ? "pause.fill" : "play.fill", action: .toggleTimer)
-                actionButton("", symbol: "arrow.counterclockwise", action: .resetTimer, accessibility: "포모도로 초기화")
-            }
+            pomodoroButtons(snapshot)
             Text("완료 \(snapshot.completedFocus)회")
                 .font(design.font(size: compact ? 10 : 15, weight: .medium))
                 .opacity(0.75)

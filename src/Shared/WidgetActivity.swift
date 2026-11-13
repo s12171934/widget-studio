@@ -7,6 +7,7 @@ struct ChecklistItem: Codable, Identifiable, Hashable {
 
 enum WidgetAction: String, Codable {
     case toggleItem, increment, decrement, resetCounter, toggleTimer, resetTimer
+    case decreaseTimerMinutes, increaseTimerMinutes
 }
 
 /// 위젯에서 바뀐 값은 디자인 설정과 따로 보관해, 편집기 저장이 진행 상황을 덮지 않는다.
@@ -16,6 +17,13 @@ struct WidgetActivity: Codable, Hashable {
     var timerEnd: Date?
     var pausedSeconds: TimeInterval?
     var pomodoro: PomodoroSession?
+    var pomodoroFocusMinutes: Int?
+
+    func pomodoroSettings(for design: WidgetDesign) -> PomodoroSettings {
+        var settings = design.pomodoroSettings.validated
+        if let pomodoroFocusMinutes { settings.focusMinutes = pomodoroFocusMinutes }
+        return settings
+    }
 
     func remainingSeconds(for design: WidgetDesign, at date: Date) -> TimeInterval {
         if let timerEnd { return max(0, timerEnd.timeIntervalSince(date)) }
@@ -50,10 +58,17 @@ struct WidgetActivity: Codable, Hashable {
             timerEnd = nil
             pausedSeconds = nil
         case (.pomodoro, .toggleTimer):
-            var session = pomodoro ?? PomodoroSession(settings: design.pomodoroSettings.validated)
+            var session = pomodoro ?? PomodoroSession(settings: pomodoroSettings(for: design))
             session.toggle(at: date)
             pomodoro = session
         case (.pomodoro, .resetTimer): pomodoro = nil
+        case (.pomodoro, .decreaseTimerMinutes), (.pomodoro, .increaseTimerMinutes):
+            guard pomodoro?.startedAt == nil else { return }
+            let current = pomodoroSettings(for: design).focusMinutes
+            let next = min(max(current + (action == .increaseTimerMinutes ? 5 : -5), 5), 60)
+            guard next != current else { return }
+            pomodoroFocusMinutes = next
+            pomodoro = nil
         default: break
         }
     }

@@ -119,6 +119,6 @@ struct PomodoroSession: Codable, Hashable {
 
 extension WidgetActivity {
     func pomodoroSnapshot(for design: WidgetDesign, at date: Date) -> PomodoroSnapshot {
-        (pomodoro ?? PomodoroSession(settings: design.pomodoroSettings.validated)).snapshot(at: date)
+        (pomodoro ?? PomodoroSession(settings: pomodoroSettings(for: design))).snapshot(at: date)
     }
 }
