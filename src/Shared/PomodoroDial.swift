@@ -34,11 +34,11 @@ struct PomodoroDial: View {
             ZStack {
                 Circle()
                     .fill(glass ? Color.white.opacity(0.12) : Color(red: 0.99, green: 0.98, blue: 0.96))
-                Circle().strokeBorder(ink.opacity(0.15), lineWidth: max(1, side * 0.012))
-                sector(side: side * 0.7)
-                    .frame(width: side * 0.7, height: side * 0.7)
+                sector(side: side)
+                    .frame(width: side, height: side)
                     .widgetAccentable(glass)
                     .accessibilityHidden(true)
+                Circle().strokeBorder(ink.opacity(0.15), lineWidth: max(1, side * 0.012))
                 ForEach(0..<60, id: \.self) { tick in
                     Rectangle()
                         .fill(ink.opacity(tick % 5 == 0 ? 0.9 : 0.35))
@@ -46,15 +46,6 @@ struct PomodoroDial: View {
                                height: side * (tick % 5 == 0 ? 0.055 : 0.025))
                         .offset(y: -side * 0.46)
                         .rotationEffect(.degrees(Double(tick) * 6))
-                }
-                ForEach(0..<12, id: \.self) { index in
-                    let angle = Double(index) * .pi / 6 - .pi / 2
-                    Text("\(index == 0 ? spanMinutes : index * spanMinutes / 12)")
-                        .font(.system(size: side * 0.068, weight: .semibold, design: .rounded))
-                        .foregroundStyle(ink)
-                        .position(x: side / 2 + side * 0.397 * cos(angle),
-                                  y: side / 2 + side * 0.397 * sin(angle))
-                        .accessibilityHidden(true)
                 }
                 Circle().fill(ink).frame(width: side * 0.035, height: side * 0.035)
                 if snapshot.showsDialCountdown {
