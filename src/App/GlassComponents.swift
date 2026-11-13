@@ -69,6 +69,8 @@ struct GlassSegmented<Value: Hashable>: View {
                     } label: {
                         Text(label(option))
                             .font(.subheadline.weight(isOn ? .semibold : .regular))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .foregroundStyle(isOn ? .white : .primary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 9)

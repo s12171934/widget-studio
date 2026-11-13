@@ -28,6 +28,15 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>WidgetFonts/WSGIFMask.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Fill0.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Fill1.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Fill2.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Fill3.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Fill4.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Select1.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Select2.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Select3.ttf</string>
+		<string>WidgetFonts/WSPomodoro60Select4.ttf</string>
 	</array>
 	<key>WSKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared</string>

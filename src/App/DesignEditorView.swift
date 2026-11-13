@@ -6,6 +6,7 @@ struct DesignEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var design: WidgetDesign
     @State private var family: WidgetFamily = .systemSmall
+    @State private var previewWidth: CGFloat = 320
     @State private var photo: UIImage?
     @State private var photoItem: PhotosPickerItem?
     @State private var photoChanged = false
@@ -25,6 +26,7 @@ struct DesignEditorView: View {
     init(design: WidgetDesign, wallpaper: Wallpaper.Style = .dusk,
          onSave: @escaping (WidgetDesign) -> Void) {
         _design = State(initialValue: design)
+        _family = State(initialValue: design.template == .pomodoro && design.pomodoroAppearance == .dial ? .systemLarge : .systemSmall)
         self.wallpaper = wallpaper
         _photo = State(initialValue: DesignStore.loadPhoto(for: design.id))
         self.onSave = onSave
@@ -76,7 +78,10 @@ struct DesignEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장", systemImage: "checkmark") { save() }
                         .buttonStyle(.glassProminent)
-                        .disabled(importingGIF || (design.template == .gif && gif == nil))
+                        .disabled(importingGIF || (design.template == .gif && gif == nil)
+                                  || (design.template == .checklist && design.checklistItems.allSatisfy {
+                                      $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                  }))
                         .accessibilityIdentifier("save-design")
                 }
             }
@@ -86,6 +91,11 @@ struct DesignEditorView: View {
                           let image = UIImage(data: data) else { return }
                     photo = image.resized(maxSide: 1000)
                     photoChanged = true
+                }
+            }
+            .onChange(of: design.template) { _, template in
+                if template == .checklist, design.checklistItems.isEmpty {
+                    design.checklistItems = [ChecklistItem(title: "첫 번째 할 일"), ChecklistItem(title: "두 번째 할 일")]
                 }
             }
             .task {
@@ -166,7 +176,7 @@ struct DesignEditorView: View {
         } header: {
             Text("\(family.studioSizeLabel) 위젯 화면")
         } footer: {
-            Text("미리보기에서 작게·중간·크게를 선택해 각각 설정하세요. 사진과 GIF의 모든 장면에 같은 표시 범위를 적용하며, 저장하면 홈 화면에 반영됩니다.")
+            Text("미리보기에서 크기를 선택해 각각 설정하세요. X-large도 별도로 저장하며, 사진과 GIF의 모든 장면에 같은 표시 범위를 적용합니다.")
         }
     }
 
@@ -186,19 +196,29 @@ struct DesignEditorView: View {
     private var previewSection: some View {
         Section {
             VStack(spacing: 16) {
-                DesignPreviewCard(design: design, family: family, photo: photo)
+                if design.template == .pomodoro {
+                    GlassSegmented(options: WidgetDesign.PomodoroAppearance.allCases,
+                                   selection: $design.pomodoroAppearance) { $0.label }
+                        .accessibilityIdentifier("pomodoro-appearance")
+                }
+                DesignPreviewCard(design: design, family: family, photo: photo,
+                                  maxWidth: previewWidth, interactive: true)
                     .frame(maxWidth: .infinity)
-                    .frame(height: DesignPreviewCard.size(for: family).height)
                     .animation(.snappy, value: family)
-                GlassSegmented(options: [WidgetFamily.systemSmall, .systemMedium, .systemLarge],
-                               selection: $family) { f in
-                    switch f {
-                    case .systemMedium: return "중간"
-                    case .systemLarge: return "크게"
-                    default: return "작게"
-                    }
+                GlassSegmented(options: [WidgetFamily.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge],
+                               selection: $family) { $0.studioSizeLabel }
+                    .accessibilityIdentifier("widget-size-picker")
+                if family == .systemExtraLarge {
+                    Text("X-large는 iPad 홈 화면에서 사용할 수 있습니다. iPhone은 작게·중간·크게를 지원합니다.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if design.template.isInteractive {
+                    Text("버튼을 눌러 미리 체험하세요. 미리보기 조작은 홈 화면의 기록을 바꾸지 않습니다.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { previewWidth = max(1, $0) }
             .padding(.vertical, 8)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
@@ -221,6 +241,56 @@ struct DesignEditorView: View {
             case .photo, .gif:
                 TextField("제목 (선택)", text: $design.title)
                 TextField("보조 문구 (선택)", text: $design.subtitle)
+            case .checklist:
+                TextField("제목", text: $design.title)
+                ForEach($design.checklistItems) { $item in
+                    TextField("할 일", text: $item.title)
+                        .accessibilityIdentifier("checklist-item-\(item.id.uuidString)")
+                }
+                .onDelete { design.checklistItems.remove(atOffsets: $0) }
+                .onMove { design.checklistItems.move(fromOffsets: $0, toOffset: $1) }
+                Button("할 일 추가", systemImage: "plus") {
+                    design.checklistItems.append(ChecklistItem(title: ""))
+                }
+                .disabled(design.checklistItems.count >= 20)
+                .accessibilityIdentifier("add-checklist-item")
+                Text("최대 20개 · 왼쪽으로 밀어 삭제합니다. 작은 위젯은 2개, 크게는 7개, X-large는 14개를 보여 줍니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .counter:
+                TextField("제목", text: $design.title)
+                TextField("보조 문구 (선택)", text: $design.subtitle)
+                LabeledContent("시작 값") {
+                    TextField("0", value: $design.counterStart, format: .number)
+                        .multilineTextAlignment(.trailing).keyboardType(.numbersAndPunctuation)
+                }
+                Stepper("한 번에 \(design.counterStep)", value: $design.counterStep, in: 1...1000)
+                Stepper("목표 \(design.counterGoal)", value: $design.counterGoal, in: 1...100_000)
+                Text("홈 화면에서 +·−로 세고 초기화 버튼으로 시작 값으로 돌아갑니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .focus:
+                TextField("제목", text: $design.title)
+                TextField("보조 문구 (선택)", text: $design.subtitle)
+                Stepper("집중 시간 \(design.focusMinutes)분", value: $design.focusMinutes, in: 1...180)
+                Text("홈 화면에서 시작·일시 정지·초기화할 수 있습니다. 남은 시간을 표시하며, 종료 알림은 울리지 않습니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .pomodoro:
+                TextField("제목", text: $design.title)
+                TextField("보조 문구 (선택)", text: $design.subtitle)
+                Stepper("집중 \(design.pomodoroSettings.focusMinutes)분", value: $design.pomodoroSettings.focusMinutes, in: 1...180)
+                    .accessibilityIdentifier("pomodoro-focus-minutes")
+                Stepper("짧은 휴식 \(design.pomodoroSettings.shortBreakMinutes)분", value: $design.pomodoroSettings.shortBreakMinutes, in: 1...60)
+                    .accessibilityIdentifier("pomodoro-short-break")
+                Stepper("긴 휴식 \(design.pomodoroSettings.longBreakMinutes)분", value: $design.pomodoroSettings.longBreakMinutes, in: 1...120)
+                    .accessibilityIdentifier("pomodoro-long-break")
+                Stepper("\(design.pomodoroSettings.rounds)회마다 긴 휴식", value: $design.pomodoroSettings.rounds, in: 1...12)
+                    .accessibilityIdentifier("pomodoro-rounds")
+                Text("집중과 휴식이 자동으로 반복됩니다. 실행 중인 주기의 시간은 유지하며 변경한 설정은 초기화 후 적용됩니다. 종료 알림은 울리지 않습니다.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .calendar:
+                TextField("제목 (X-large)", text: $design.title)
+                TextField("보조 문구 (X-large, 선택)", text: $design.subtitle)
+                Text("이번 달과 오늘 날짜를 보여 주며 자정에 날짜가 바뀝니다.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -327,6 +397,13 @@ struct DesignEditorView: View {
     }
 
     private func save() {
+        if design.template == .checklist {
+            design.checklistItems = Array(design.checklistItems.compactMap { item in
+                let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                return title.isEmpty ? nil : ChecklistItem(id: item.id, title: title)
+            }.prefix(20))
+            guard !design.checklistItems.isEmpty else { return }
+        }
         do {
             if design.template == .gif {
                 guard let gif else { return }

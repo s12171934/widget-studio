@@ -48,18 +48,40 @@ struct SelectDesignIntent: WidgetConfigurationIntent {
 struct DesignEntry: TimelineEntry {
     let date: Date
     let design: WidgetDesign?
+    let activity: WidgetActivity
+    var displaySize: CGSize = .zero
+
+    init(date: Date, design: WidgetDesign?) {
+        self.date = date
+        self.design = design
+        activity = design.flatMap { $0.template.isInteractive ? DesignStore.loadActivity(for: $0.id) : nil } ?? WidgetActivity()
+    }
 }
 
 struct DesignProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> DesignEntry {
-        DesignEntry(date: .now, design: WidgetDesign.samples[0])
+        var entry = DesignEntry(date: .now, design: WidgetDesign.samples[0])
+        entry.displaySize = context.displaySize
+        return entry
     }
 
     func snapshot(for configuration: SelectDesignIntent, in context: Context) async -> DesignEntry {
-        DesignEntry(date: .now, design: resolve(configuration) ?? WidgetDesign.samples[0])
+        var entry = DesignEntry(date: .now, design: resolve(configuration) ?? WidgetDesign.samples[0])
+        entry.displaySize = context.displaySize
+        return entry
     }
 
     func timeline(for configuration: SelectDesignIntent, in context: Context) async -> Timeline<DesignEntry> {
+        let timeline = await contentTimeline(for: configuration, in: context)
+        let entries = timeline.entries.map { value in
+            var entry = value
+            entry.displaySize = context.displaySize
+            return entry
+        }
+        return Timeline(entries: entries, policy: timeline.policy)
+    }
+
+    private func contentTimeline(for configuration: SelectDesignIntent, in context: Context) async -> Timeline<DesignEntry> {
         let design = resolve(configuration)
         let now = Date.now
         let cal = Calendar.current
@@ -78,7 +100,7 @@ struct DesignProvider: AppIntentTimelineProvider {
                 return DesignEntry(date: d, design: design)
             }
             return Timeline(entries: entries, policy: .atEnd)
-        case .countdown:
+        case .countdown, .calendar:
             // 자정마다 D-day 숫자가 바뀐다.
             var entries = [DesignEntry(date: now, design: design)]
             var day = cal.startOfDay(for: now)
@@ -89,6 +111,22 @@ struct DesignProvider: AppIntentTimelineProvider {
             return Timeline(entries: entries, policy: .atEnd)
         case .text, .photo, .gif:
             return Timeline(entries: [DesignEntry(date: now, design: design)], policy: .never)
+        case .checklist, .counter:
+            return Timeline(entries: [DesignEntry(date: now, design: design)], policy: .never)
+        case .focus:
+            var entries = [DesignEntry(date: now, design: design)]
+            if let end = entries[0].activity.timerEnd, end > now {
+                entries.append(DesignEntry(date: end, design: design))
+            }
+            return Timeline(entries: entries, policy: .never)
+        case .pomodoro:
+            let current = DesignEntry(date: now, design: design)
+            guard let session = current.activity.pomodoro, session.startedAt != nil else {
+                return Timeline(entries: [current], policy: .never)
+            }
+            let dates = session.transitionDates(after: now, includingCountdownStart: design.pomodoroAppearance == .dial)
+            let entries = [current] + dates.map { DesignEntry(date: $0, design: design) }
+            return Timeline(entries: entries, policy: .atEnd)
         }
     }
 
@@ -128,7 +166,10 @@ struct WidgetStudioEntryView: View {
                         .clipped()
                         .opacity(0.9)
                 }
-                DesignContent(design: design, family: family, date: entry.date, glass: isGlass)
+                DesignContent(design: design, family: family, date: entry.date, glass: isGlass,
+                              activity: entry.activity, widgetControls: true,
+                              layoutSize: CGSize(width: max(1, entry.displaySize.width - 32),
+                                                 height: max(1, entry.displaySize.height - 32)))
                     .padding(16)
             }
             .containerBackground(for: .widget) {
@@ -158,7 +199,7 @@ struct WidgetStudioWidget: Widget {
         }
         .configurationDisplayName("위젯 스튜디오")
         .description("앱에서 만든 디자인을 홈 화면에 놓습니다. 길게 눌러 디자인을 바꿀 수 있어요.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
         // 사진을 가장자리까지 채우기 위해 시스템 여백을 끄고 내용에 직접 16pt 를 준다.
         .contentMarginsDisabled()
     }

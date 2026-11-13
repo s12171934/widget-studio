@@ -134,26 +134,18 @@ struct CreateBar: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 14) {
-            HStack(spacing: 8) {
+            VStack(spacing: 12) {
                 if expanded {
-                    ForEach(WidgetDesign.Template.allCases) { t in
-                        Button {
-                            onPick(t)
-                            withAnimation(.bouncy) { expanded = false }
-                        } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: t.symbol).font(.title3)
-                                Text(t.label).font(.caption2.weight(.medium))
+                    Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                        ForEach(0..<((WidgetDesign.Template.allCases.count + 2) / 3), id: \.self) { row in
+                            GridRow {
+                                ForEach(Array(WidgetDesign.Template.allCases.dropFirst(row * 3).prefix(3))) { t in
+                                    templateButton(t)
+                                }
                             }
-                            .frame(width: 50, height: 58)
-                            .contentShape(.rect(cornerRadius: 22))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(t.label)
-                        .accessibilityIdentifier("create-\(t.rawValue)")
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-                        .glassEffectID(t.rawValue, in: ns)
                     }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 Button {
                     withAnimation(.bouncy(duration: 0.4)) { expanded.toggle() }
@@ -170,7 +162,28 @@ struct CreateBar: View {
                 .glassEffectID("toggle", in: ns)
                 .accessibilityLabel(expanded ? "닫기" : "새 디자인")
             }
+            .frame(maxWidth: expanded ? 480 : 58)
+            .padding(.horizontal, expanded ? 12 : 0)
         }
+        .padding(.horizontal, 16)
+    }
+
+    private func templateButton(_ template: WidgetDesign.Template) -> some View {
+        Button {
+            onPick(template)
+            withAnimation(.bouncy) { expanded = false }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: template.symbol).font(.title3)
+                Text(template.label).font(.caption2.weight(.medium))
+            }
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .contentShape(.rect(cornerRadius: 22))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(template.label)
+        .accessibilityIdentifier("create-\(template.rawValue)")
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
     }
 }
 
@@ -187,6 +200,18 @@ extension WidgetDesign {
             return WidgetDesign(name: "새 사진", template: .photo, title: "", alignment: .leading)
         case .gif:
             return WidgetDesign(name: "새 GIF", template: .gif, title: "", alignment: .leading)
+        case .checklist:
+            return WidgetDesign(name: "새 체크리스트", template: .checklist, title: "오늘의 할 일",
+                                checklistItems: [ChecklistItem(title: "물 마시기"), ChecklistItem(title: "책 읽기"),
+                                                 ChecklistItem(title: "산책하기")])
+        case .counter:
+            return WidgetDesign(name: "새 카운터", template: .counter, title: "오늘의 기록")
+        case .focus:
+            return WidgetDesign(name: "새 집중 타이머", template: .focus, title: "지금은 집중할 시간")
+        case .pomodoro:
+            return WidgetDesign(name: "새 포모도로", template: .pomodoro, title: "집중과 휴식", pomodoroAppearance: .dial)
+        case .calendar:
+            return WidgetDesign(name: "새 월간 달력", template: .calendar, title: "오늘")
         }
     }
 }
@@ -209,7 +234,16 @@ struct GuideView: View {
                 Section("GIF 위젯") {
                     Label("GIF 편집기의 「프리셋에서 고르기」에서 8가지 장면을 바로 사용할 수 있습니다. 「GIF 검색·다운로드」에서는 검색 사이트를 열고 저장한 파일을 가져올 수 있습니다.", systemImage: "square.grid.2x2")
                     Label("+ 에서 GIF를 골라 사진 보관함이나 파일에서 가져옵니다. 12MB·300프레임 이하의 GIF를 사용할 수 있습니다.", systemImage: "photo.on.rectangle")
-                    Label("홈 화면에는 첫 장면이 표시되고, 위젯을 누르면 앱에서 반복 재생합니다. 앱의 디자인을 길게 눌러서도 재생할 수 있습니다.", systemImage: "play.rectangle")
+                    Label("홈 화면에서는 16장면·2초 루프로 반복 재생합니다. 위젯을 누르면 앱에서 원본을 재생합니다.", systemImage: "play.rectangle")
+                }
+                Section("버튼으로 조작하는 위젯") {
+                    Label("체크리스트는 항목을 눌러 완료·취소하고, 카운터는 +·−·초기화로 값을 바꿉니다.", systemImage: "hand.tap")
+                    Label("집중 타이머는 시작·일시 정지·초기화가 가능합니다. 앱을 열지 않고 조작하며, 종료 알림은 울리지 않습니다.", systemImage: "timer")
+                    Label("포모도로는 집중·짧은 휴식을 반복하고 설정한 횟수마다 긴 휴식으로 바뀝니다. 홈 화면에서 시작·정지·재개·초기화하며 완료 횟수도 표시합니다.", systemImage: "timer.circle")
+                }
+                Section("크기") {
+                    Label("작게·중간·크게는 iPhone과 iPad에서 사용할 수 있습니다. X-large는 iPad 홈 화면용입니다.", systemImage: "rectangle.expand.vertical")
+                    Label("iPhone에서도 X-large 디자인을 미리 보고 크기별 사진·GIF 배치를 설정할 수 있습니다.", systemImage: "ipad.and.iphone")
                 }
                 Section("투명(Liquid Glass) 위젯") {
                     Label("위젯의 모습은 iOS 홈 화면 설정만 따릅니다. 홈 화면 「편집」→「사용자화」에서 클리어·틴트를 고르면 위젯 배경이 유리로 바뀝니다.",

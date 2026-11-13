@@ -9,6 +9,8 @@ final class DesignLibrary {
 
     init() {
         DesignStore.seedIfNeeded()
+        DesignStore.seedPomodoroIfNeeded()
+        DesignStore.seedPomodoroDialIfNeeded()
         DesignStore.removeLegacyGlassData()
         designs = DesignStore.load()
     }
@@ -29,6 +31,7 @@ final class DesignLibrary {
             do {
                 try DesignStore.deleteGIF(for: designs[i].id)
                 DesignStore.deletePhoto(for: designs[i].id)
+                DesignStore.deleteActivity(for: designs[i].id)
                 designs.remove(at: i)
             } catch { errorMessage = error.localizedDescription }
         }

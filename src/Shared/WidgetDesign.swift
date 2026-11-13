@@ -3,9 +3,10 @@ import Foundation
 /// 위젯 디자인 한 개. 앱이 만들고, 위젯 확장이 읽는다.
 struct WidgetDesign: Codable, Identifiable, Hashable {
     enum Template: String, Codable, CaseIterable, Identifiable {
-        case text, clock, countdown, photo, gif
+        case text, clock, countdown, photo, gif, checklist, counter, focus, pomodoro, calendar
         var id: String { rawValue }
         var usesImage: Bool { self == .photo || self == .gif }
+        var isInteractive: Bool { [.checklist, .counter, .focus, .pomodoro].contains(self) }
         var label: String {
             switch self {
             case .text: return "문구"
@@ -13,6 +14,11 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
             case .countdown: return "D-day"
             case .photo: return "사진"
             case .gif: return "GIF"
+            case .checklist: return "체크리스트"
+            case .counter: return "카운터"
+            case .focus: return "집중 타이머"
+            case .pomodoro: return "포모도로"
+            case .calendar: return "월간 달력"
             }
         }
         var symbol: String {
@@ -22,6 +28,11 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
             case .countdown: return "calendar.badge.clock"
             case .photo: return "photo"
             case .gif: return "play.rectangle"
+            case .checklist: return "checklist"
+            case .counter: return "plus.forwardslash.minus"
+            case .focus: return "timer"
+            case .pomodoro: return "timer.circle.fill"
+            case .calendar: return "calendar"
             }
         }
     }
@@ -45,6 +56,12 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
         var label: String { self == .leading ? "왼쪽" : "가운데" }
     }
 
+    enum PomodoroAppearance: String, Codable, CaseIterable, Identifiable {
+        case digital, dial
+        var id: String { rawValue }
+        var label: String { self == .digital ? "숫자형" : "빨간 시계" }
+    }
+
     var id: UUID = UUID()
     var name: String
     var template: Template
@@ -59,6 +76,13 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
     var alignment: Alignment = .leading
     var photoDimming: Double = 0.25
     var imageLayouts: [String: WidgetImageLayout] = [:]
+    var checklistItems: [ChecklistItem] = []
+    var counterStart: Int = 0
+    var counterStep: Int = 1
+    var counterGoal: Int = 10
+    var focusMinutes: Int = 25
+    var pomodoroSettings = PomodoroSettings()
+    var pomodoroAppearance: PomodoroAppearance = .digital
     var updatedAt: Date = .now
 
     var widgetURL: URL? {
@@ -83,7 +107,8 @@ struct WidgetDesign: Codable, Identifiable, Hashable {
 extension WidgetDesign {
     enum CodingKeys: String, CodingKey {
         case id, name, template, title, subtitle, targetDate, backgroundHex, gradientHex, useGradient,
-             textHex, fontStyle, alignment, photoDimming, imageLayouts, updatedAt
+             textHex, fontStyle, alignment, photoDimming, imageLayouts, checklistItems,
+             counterStart, counterStep, counterGoal, focusMinutes, pomodoroSettings, pomodoroAppearance, updatedAt
     }
 
     /// 필드가 늘거나 줄어도 예전에 저장한 디자인을 읽을 수 있도록, 없는 키는 기본값으로 채우고 모르는 키는 버린다.
@@ -104,6 +129,13 @@ extension WidgetDesign {
         alignment = try c.decodeIfPresent(Alignment.self, forKey: .alignment) ?? base.alignment
         photoDimming = try c.decodeIfPresent(Double.self, forKey: .photoDimming) ?? base.photoDimming
         imageLayouts = try c.decodeIfPresent([String: WidgetImageLayout].self, forKey: .imageLayouts) ?? [:]
+        checklistItems = try c.decodeIfPresent([ChecklistItem].self, forKey: .checklistItems) ?? []
+        counterStart = try c.decodeIfPresent(Int.self, forKey: .counterStart) ?? base.counterStart
+        counterStep = try c.decodeIfPresent(Int.self, forKey: .counterStep) ?? base.counterStep
+        counterGoal = try c.decodeIfPresent(Int.self, forKey: .counterGoal) ?? base.counterGoal
+        focusMinutes = try c.decodeIfPresent(Int.self, forKey: .focusMinutes) ?? base.focusMinutes
+        pomodoroSettings = try c.decodeIfPresent(PomodoroSettings.self, forKey: .pomodoroSettings) ?? base.pomodoroSettings
+        pomodoroAppearance = try c.decodeIfPresent(PomodoroAppearance.self, forKey: .pomodoroAppearance) ?? .digital
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
     }
 

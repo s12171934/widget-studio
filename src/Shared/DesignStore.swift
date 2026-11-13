@@ -55,11 +55,65 @@ enum DesignStore {
         load().first { $0.id == id }
     }
 
+    private static let activityLock = NSLock()
+    private static func activityKey(_ id: UUID) -> String { "activity.v1.\(id.uuidString)" }
+
+    static func loadActivity(for id: UUID) -> WidgetActivity {
+        guard let data = read(activityKey(id)),
+              let activity = try? JSONDecoder().decode(WidgetActivity.self, from: data) else { return WidgetActivity() }
+        return activity
+    }
+
+    static func deleteActivity(for id: UUID) { remove(activityKey(id)) }
+
+    enum ActionError: LocalizedError {
+        case missingDesign, storage
+        var errorDescription: String? {
+            switch self {
+            case .missingDesign: return "디자인이 삭제되었습니다. 위젯에서 다른 디자인을 골라 주세요."
+            case .storage: return "변경 사항을 저장하지 못했습니다. 다시 시도해 주세요."
+            }
+        }
+    }
+
+    static func perform(_ action: WidgetAction, for id: UUID, itemID: UUID? = nil) throws {
+        activityLock.lock()
+        defer { activityLock.unlock() }
+        guard let design = design(id: id) else { throw ActionError.missingDesign }
+        var activity = loadActivity(for: id)
+        activity.apply(action, to: design, itemID: itemID)
+        guard write(try JSONEncoder().encode(activity), activityKey(id)) else { throw ActionError.storage }
+    }
+
     /// 처음 실행할 때 예시 디자인을 넣는다. 이미 넣었으면 아무것도 하지 않는다.
     static func seedIfNeeded() {
         guard read(seededKey) == nil else { return }
         if load().isEmpty { save(WidgetDesign.samples) }
         write(Data([1]), seededKey)
+    }
+
+    /// 포모도로 기본 디자인을 한 번 추가한다. 지운 디자인은 다시 만들지 않는다.
+    static func seedPomodoroIfNeeded() {
+        let key = "pomodoroSeeded.v1"
+        guard read(key) == nil else { return }
+        var designs = load()
+        if !designs.contains(where: { $0.template == .pomodoro }) {
+            designs.append(WidgetDesign(name: "포모도로 25/5", template: .pomodoro, title: "집중과 휴식"))
+            guard let data = try? JSONEncoder().encode(designs), write(data, designsKey) else { return }
+        }
+        write(Data([1]), key)
+    }
+
+    static func seedPomodoroDialIfNeeded() {
+        let key = "pomodoroDialSeeded.v1"
+        guard read(key) == nil else { return }
+        var designs = load()
+        if !designs.contains(where: { $0.template == .pomodoro && $0.pomodoroAppearance == .dial }) {
+            designs.append(WidgetDesign(name: "빨간 타이머 25/5", template: .pomodoro,
+                                        title: "집중과 휴식", pomodoroAppearance: .dial))
+            guard let data = try? JSONEncoder().encode(designs), write(data, designsKey) else { return }
+        }
+        write(Data([1]), key)
     }
 
     // MARK: - 사진

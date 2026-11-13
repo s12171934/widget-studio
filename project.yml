@@ -31,13 +31,18 @@ targets:
         # 실기기는 키체인 공유(무료 팀 가능), 시뮬레이터는 App Group.
         "CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]": src/App/WidgetStudio.device.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": src/App/WidgetStudio.entitlements
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: src/App/Info.plist
       properties:
         CFBundleURLTypes:
           - CFBundleURLSchemes: [widgetstudio]
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         WSKeychainGroup: $(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared
     dependencies:
       - target: WidgetStudioWidget
@@ -72,14 +77,24 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.s12171934.widgetstudio.widget
         "CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]": src/Widget/WidgetStudioWidget.device.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": src/Widget/WidgetStudioWidget.entitlements
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: src/Widget/Info.plist
       properties:
         CFBundleDisplayName: 위젯 스튜디오
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-        UIAppFonts: [WidgetFonts/WSGIFMask.ttf]
+        UIAppFonts:
+          - WidgetFonts/WSGIFMask.ttf
+          - WidgetFonts/WSPomodoro60Fill0.ttf
+          - WidgetFonts/WSPomodoro60Fill1.ttf
+          - WidgetFonts/WSPomodoro60Fill2.ttf
+          - WidgetFonts/WSPomodoro60Fill3.ttf
+          - WidgetFonts/WSPomodoro60Fill4.ttf
+          - WidgetFonts/WSPomodoro60Select1.ttf
+          - WidgetFonts/WSPomodoro60Select2.ttf
+          - WidgetFonts/WSPomodoro60Select3.ttf
+          - WidgetFonts/WSPomodoro60Select4.ttf
         WSKeychainGroup: $(AppIdentifierPrefix)io.github.s12171934.widgetstudio.shared
 schemes:
   WidgetStudio:

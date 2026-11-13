@@ -62,6 +62,7 @@ extension WidgetFamily {
         switch self {
         case .systemMedium: return "medium"
         case .systemLarge: return "large"
+        case .systemExtraLarge: return "extraLarge"
         default: return "small"
         }
     }
@@ -70,6 +71,7 @@ extension WidgetFamily {
         switch self {
         case .systemMedium: return "중간"
         case .systemLarge: return "크게"
+        case .systemExtraLarge: return "X-large"
         default: return "작게"
         }
     }
@@ -139,6 +141,10 @@ struct DesignContent: View {
     /// iOS 홈 화면이 틴트·클리어일 때(widgetRenderingMode == .accented). 사용자 글자 색 대신
     /// 단색으로 그리고, 강조 그룹만 또렷하게 둔다. 앱 안에서는 항상 false.
     var glass = false
+    var activity = WidgetActivity()
+    var widgetControls = false
+    var layoutSize: CGSize?
+    var onAction: ((WidgetAction, UUID?) -> Void)?
 
     private var isSmall: Bool { family == .systemSmall }
     private var scale: CGFloat {
@@ -158,6 +164,10 @@ struct DesignContent: View {
             case .clock: clockBody
             case .countdown: countdownBody
             case .photo, .gif: photoBody
+            case .checklist, .counter, .focus, .pomodoro, .calendar:
+                InteractiveDesignContent(design: design, family: family, date: date,
+                                         activity: activity, widgetControls: widgetControls,
+                                         layoutSize: layoutSize, onAction: onAction)
             }
         }
         .foregroundStyle(textColor)
@@ -241,10 +251,14 @@ struct DesignContent: View {
 
 /// 홈 화면 위젯(기본 모드)과 같은 크기 비율로 디자인을 그려 보여 준다.
 struct DesignPreviewCard: View {
+    @Environment(\.scenePhase) private var scenePhase
     let design: WidgetDesign
     var family: WidgetFamily = .systemSmall
     var photo: UIImage?
     var date: Date?
+    var maxWidth: CGFloat?
+    var interactive = false
+    @State private var activity = WidgetActivity()
 
     static let cornerRadius: CGFloat = 24
 
@@ -252,20 +266,35 @@ struct DesignPreviewCard: View {
         switch family {
         case .systemMedium: return CGSize(width: 338, height: 158)
         case .systemLarge: return CGSize(width: 338, height: 354)
+        case .systemExtraLarge: return CGSize(width: 720, height: 354)
         default: return CGSize(width: 158, height: 158)
         }
     }
 
     var body: some View {
         let size = Self.size(for: family)
-        // 날짜를 고정하지 않으면 분마다 다시 그려 시계·D-day 가 실제처럼 바뀐다.
-        TimelineView(.everyMinute) { context in
-            DesignContent(design: design, family: family, date: date ?? context.date)
+        let scale = min(1, (maxWidth ?? size.width) / size.width)
+        // 포모도로는 단계 경계를 초마다 확인하고, 시계·D-day는 분 경계에서 갱신한다.
+        let minute = Calendar.current.dateInterval(of: .minute, for: .now)?.start ?? .now
+        TimelineView(.periodic(from: minute, by: design.template == .pomodoro ? 1 : 60)) { context in
+            DesignContent(design: design, family: family, date: date ?? context.date, activity: activity,
+                          onAction: { action, item in activity.apply(action, to: design, itemID: item) })
                 .padding(16)
         }
         .frame(width: size.width, height: size.height)
         .background(DesignBackground(design: design, photo: photo, family: family))
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+        .scaleEffect(scale)
+        .frame(width: size.width * scale, height: size.height * scale)
+        .allowsHitTesting(interactive)
+        .accessibilityHidden(!interactive)
+        .task(id: design.id) { activity = DesignStore.loadActivity(for: design.id) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { activity = DesignStore.loadActivity(for: design.id) }
+        }
+        .onChange(of: design.focusMinutes) { _, _ in
+            if !activity.timerIsRunning(at: .now) { activity.pausedSeconds = nil }
+        }
     }
 }
